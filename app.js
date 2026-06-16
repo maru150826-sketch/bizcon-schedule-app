@@ -1,5 +1,5 @@
 // ============================================================
-// SAMPO QUEST fixed-team scheduler v8 lightweight
+// SAMPO QUEST fixed-team scheduler v9 lightweight + slot edit
 // GitHub Pages用。secret key / service_role key は絶対に入れないでください。
 // ============================================================
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
@@ -29,6 +29,7 @@ const state = {
   notes: [],
   noteSlotId: null,
   selectedTasks: [],
+  editingSlotId: null,
   deviceToken: null,
 };
 
@@ -140,6 +141,10 @@ function canDeleteSlot(slot) {
   return true; // 旧版で作った候補は作成者不明のため、チーム内で削除可能にする
 }
 
+function canEditSlot(slot) {
+  return canDeleteSlot(slot);
+}
+
 function slotCreatorName(slot) {
   const creator = state.members.find((member) => member.id === slot.created_by_member_id);
   if (creator) return creator.name;
@@ -152,21 +157,26 @@ function setToday() {
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
 }
 
-function buildTimeOptions() {
-  const start = $('slotStart');
-  const end = $('slotEnd');
+function buildTimeOptionMarkup(selectedValue = '') {
+  const selected = hm(selectedValue);
   const options = [];
 
   for (let hour = 0; hour < 24; hour += 1) {
     for (const minute of [0, 30]) {
       const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
       const label = `${hour}:${String(minute).padStart(2, '0')}`;
-      options.push(`<option value="${value}">${label}</option>`);
+      options.push(`<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`);
     }
   }
 
-  start.innerHTML = options.join('');
-  end.innerHTML = options.join('');
+  return options.join('');
+}
+
+function buildTimeOptions() {
+  const start = $('slotStart');
+  const end = $('slotEnd');
+  start.innerHTML = buildTimeOptionMarkup('18:00');
+  end.innerHTML = buildTimeOptionMarkup('21:00');
   start.value = '18:00';
   end.value = '21:00';
 }
@@ -547,6 +557,7 @@ function renderCandidates() {
     const myResponse = state.currentMember ? memberResponse(state.currentMember.id, slot.id) : null;
     const c = counts(slot.id);
     const unanswered = unansweredMembers(slot.id);
+    const editForm = state.editingSlotId === slot.id ? renderSlotEditForm(slot) : '';
     const memberVotes = state.members.length
       ? state.members.map((member) => {
           const response = memberResponse(member.id, slot.id);
@@ -598,8 +609,11 @@ function renderCandidates() {
         ${memberVotes}
       </div>
 
+      ${editForm}
+
       <div class="slot-actions">
         <button type="button" class="primary confirm-slot" data-slot="${slot.id}">${slot.is_confirmed ? '確定を外す' : 'この日程で確定'}</button>
+        ${canEditSlot(slot) ? `<button type="button" class="secondary edit-slot" data-slot="${slot.id}">${state.editingSlotId === slot.id ? '編集中' : '候補日を編集'}</button>` : `<button type="button" class="secondary edit-slot" disabled>自分が追加した候補のみ編集可</button>`}
         ${canDeleteSlot(slot) ? `<button type="button" class="danger delete-slot" data-slot="${slot.id}">この候補日を削除</button>` : `<button type="button" class="danger delete-slot" disabled>自分が追加した候補のみ削除可</button>`}
       </div>
     </article>`;
@@ -608,7 +622,111 @@ function renderCandidates() {
   document.querySelectorAll('.mark-button').forEach((button) => button.addEventListener('click', autoSaveStatus));
   document.querySelectorAll('.save-comment').forEach((button) => button.addEventListener('click', saveComment));
   document.querySelectorAll('.confirm-slot').forEach((button) => button.addEventListener('click', confirmSlot));
+  document.querySelectorAll('.edit-slot').forEach((button) => button.addEventListener('click', startEditSlot));
+  document.querySelectorAll('.save-slot-edit').forEach((button) => button.addEventListener('click', saveSlotEdit));
+  document.querySelectorAll('.cancel-slot-edit').forEach((button) => button.addEventListener('click', cancelSlotEdit));
   document.querySelectorAll('.delete-slot').forEach((button) => button.addEventListener('click', deleteSlot));
+}
+
+function renderSlotEditForm(slot) {
+  return `<form class="slot-edit-form" data-slot="${slot.id}">
+    <div class="edit-title">候補日の編集</div>
+    <div class="form-grid full">
+      <label>日付
+        <input name="date" type="date" value="${esc(slot.date || '')}" required />
+      </label>
+      <label>場所
+        <select name="location" required>
+          <option value="オンライン" ${displayLocation(slot.location) === 'オンライン' ? 'selected' : ''}>オンライン</option>
+          <option value="大学" ${displayLocation(slot.location) === '大学' ? 'selected' : ''}>大学</option>
+        </select>
+      </label>
+      <label>開始時間
+        <select name="start_time" required>${buildTimeOptionMarkup(slot.start_time)}</select>
+      </label>
+      <label>終了時間
+        <select name="end_time" required>${buildTimeOptionMarkup(slot.end_time)}</select>
+      </label>
+      <label class="full">作業内容
+        <input name="task_title" value="${esc(slot.task_title || '')}" placeholder="例：企画書作成 / スライド作成" required />
+      </label>
+      <label class="full">候補日に対するメモ 任意
+        <textarea name="memo" rows="3" placeholder="例：19時以降参加でもOK">${esc(slot.memo || '')}</textarea>
+      </label>
+    </div>
+    <div class="edit-actions">
+      <button type="button" class="primary save-slot-edit" data-slot="${slot.id}">編集内容を保存</button>
+      <button type="button" class="secondary cancel-slot-edit" data-slot="${slot.id}">キャンセル</button>
+    </div>
+  </form>`;
+}
+
+function startEditSlot(event) {
+  if (!state.currentMember) return showToast('先に自分の名前を選んでください', 'error');
+
+  const slotId = event.currentTarget.dataset.slot;
+  const slot = state.slots.find((item) => item.id === slotId);
+  if (!slot) return showToast('候補日が見つかりません', 'error');
+  if (!canEditSlot(slot)) return showToast('自分が追加した候補日だけ編集できます', 'error');
+
+  state.editingSlotId = state.editingSlotId === slotId ? null : slotId;
+  render();
+  if (state.editingSlotId) {
+    document.querySelector(`.slot-edit-form[data-slot="${slotId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function cancelSlotEdit(event) {
+  if (event?.currentTarget?.dataset?.slot === state.editingSlotId) {
+    state.editingSlotId = null;
+    render();
+  }
+}
+
+async function saveSlotEdit(event) {
+  if (!state.currentMember) return showToast('先に自分の名前を選んでください', 'error');
+
+  const slotId = event.currentTarget.dataset.slot;
+  const slot = state.slots.find((item) => item.id === slotId);
+  if (!slot) return showToast('候補日が見つかりません', 'error');
+  if (!canEditSlot(slot)) return showToast('自分が追加した候補日だけ編集できます', 'error');
+
+  const form = document.querySelector(`.slot-edit-form[data-slot="${slotId}"]`);
+  if (!form) return showToast('編集フォームが見つかりません', 'error');
+
+  const formData = new FormData(form);
+  const date = formData.get('date');
+  const start_time = formData.get('start_time');
+  const end_time = formData.get('end_time');
+  const task_title = formData.get('task_title')?.trim();
+  const location = formData.get('location');
+  const memo = formData.get('memo')?.trim();
+
+  if (!date) return showToast('日付を選んでください', 'error');
+  if (!start_time || !end_time) return showToast('開始時間と終了時間を選んでください', 'error');
+  if (start_time >= end_time) return showToast('終了時間は開始時間より後にしてください', 'error');
+  if (!task_title) return showToast('作業内容を入力してください', 'error');
+  if (!location) return showToast('場所を選んでください', 'error');
+
+  const previousSlots = state.slots.map((item) => ({ ...item }));
+  const payload = { date, start_time, end_time, task_title, location, memo };
+  state.slots = state.slots.map((item) => item.id === slotId ? { ...item, ...payload } : item);
+  state.editingSlotId = null;
+  render();
+  showToast('保存中...');
+
+  const { error } = await sb
+    .from('time_slots')
+    .update(payload)
+    .eq('id', slotId);
+
+  if (error) {
+    state.slots = previousSlots;
+    render();
+    return fail('候補日の編集に失敗しました', error);
+  }
+
+  showToast('候補日を更新しました');
 }
 
 async function autoSaveStatus(event) {

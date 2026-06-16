@@ -1,5 +1,5 @@
--- SAMPO QUEST fixed-team scheduler schema v8
--- 回答者選択式・スマホ/PC共通操作・削除対応・確定解除対応版。
+-- SAMPO QUEST fixed-team scheduler schema v9
+-- 回答者選択式・スマホ/PC共通操作・削除対応・確定解除・候補日編集対応版。
 -- 既存プロジェクトに対しても再実行しやすいようにしています。
 
 create extension if not exists "pgcrypto";
