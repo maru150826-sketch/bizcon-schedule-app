@@ -3,21 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Group Schedule Board</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="app.js"></script>
+  <title>グループ予定調整</title>
+  <link rel="stylesheet" href="./style.css?v=4" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
-  <div id="toast" class="toast is-hidden" role="status"></div>
+  <div id="toast" class="toast is-hidden"></div>
 
-  <header class="app-header">
-    <div>
-      <p class="eyebrow">Bizcon Team Scheduler</p>
-      <h1>グループ予定調整</h1>
-      <p class="lead">候補日時ごとの○△×を共有し、ビジコン・ゼミ・チーム活動の作業日を決めるためのWebアプリです。</p>
-    </div>
+  <header class="hero">
+    <p class="eyebrow">BIZCON TEAM SCHEDULER</p>
+    <h1>グループ予定調整</h1>
+    <p class="lead">候補日時ごとの○△×を共有し、ビジコン・ゼミ・チーム活動の作業日を決めるためのWebアプリです。</p>
   </header>
 
   <main class="container">
@@ -34,43 +30,36 @@
           <p>最初にチーム用の共有URLを作成します。</p>
         </div>
       </div>
-
-      <form id="groupForm" class="grid-form">
-        <label>
-          グループ名
-          <input id="groupName" required placeholder="SAMPO QUEST ビジコンチーム" />
+      <form id="groupForm" class="form-grid">
+        <label>グループ名
+          <input name="name" required value="SAMPO QUEST ビジコンチーム" />
         </label>
-        <label>
-          管理者名
-          <input id="adminName" placeholder="田丸" />
+        <label>管理者名
+          <input name="admin_name" value="田丸" />
         </label>
-        <label class="span-2">
-          説明
-          <textarea id="groupDescription" rows="3" placeholder="観光クロスオーバーコンテストに向けた作業予定調整"></textarea>
+        <label class="full">説明
+          <textarea name="description" rows="3">観光クロスオーバーコンテストに向けた作業予定調整</textarea>
         </label>
-        <label class="span-2">
-          目的
-          <textarea id="groupPurpose" rows="3" placeholder="全員が集まれる日時を決めて、企画書・スライド・発表準備を進める"></textarea>
+        <label class="full">目的
+          <textarea name="purpose" rows="3">全員が集まれる日時を決めて、企画書・スライド・発表準備を進める</textarea>
         </label>
-        <button type="submit" class="primary span-2">グループを作成</button>
+        <button type="submit" class="primary full">グループを作成</button>
       </form>
     </section>
 
     <section id="groupSection" class="card is-hidden">
       <div class="group-head">
         <div>
-          <p class="eyebrow">現在のグループ</p>
-          <h2 id="currentGroupName">-</h2>
-          <p id="currentGroupDescription" class="muted"></p>
-          <p id="currentGroupPurpose" class="purpose"></p>
+          <p class="eyebrow">CURRENT GROUP</p>
+          <h2 id="groupName"></h2>
+          <p id="groupDescription" class="muted"></p>
+          <p id="groupPurpose"></p>
         </div>
-        <div class="share-box">
-          <label>共有URL</label>
-          <div class="share-row">
-            <input id="shareUrl" readonly />
-            <button id="copyUrlButton" type="button">コピー</button>
-          </div>
-        </div>
+        <button id="copyUrlBtn" class="secondary" type="button">共有URLをコピー</button>
+      </div>
+      <div class="share-box">
+        <span>共有URL</span>
+        <code id="shareUrl"></code>
       </div>
     </section>
 
@@ -78,78 +67,71 @@
       <div class="section-title">
         <span class="step">2</span>
         <div>
-          <h2>メンバーとして参加</h2>
-          <p>名前を入力すると、この端末では次回から同じメンバーとして扱います。</p>
+          <h2>メンバーとして参加する</h2>
+          <p>同じ名前がある場合は既存メンバーとして扱います。</p>
         </div>
       </div>
-      <form id="memberForm" class="grid-form compact">
-        <label>
-          メンバー名
-          <input id="memberName" required placeholder="田丸" />
+      <form id="memberForm" class="form-grid">
+        <label>メンバー名
+          <input name="name" required placeholder="例：田丸" />
         </label>
-        <label>
-          役割・メモ 任意
-          <input id="memberRoleMemo" placeholder="収益モデル担当" />
+        <label>役割・メモ 任意
+          <input name="role_memo" placeholder="例：収益モデル担当" />
         </label>
-        <button type="submit" class="primary">参加する / 更新する</button>
+        <button type="submit" class="primary full">参加する / 切り替える</button>
       </form>
-      <div id="currentMemberBox" class="current-member is-hidden"></div>
+      <div id="currentMemberBox" class="small-box is-hidden"></div>
+      <div id="memberList" class="member-list"></div>
     </section>
 
-    <section id="confirmedSection" class="card accent is-hidden">
+    <section id="confirmedSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">✓</span>
+        <span class="step">3</span>
         <div>
           <h2>確定した作業予定</h2>
-          <p>候補日時から確定された予定です。</p>
+          <p>候補から確定した日時を表示します。</p>
         </div>
       </div>
-      <div id="confirmedContent"></div>
+      <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
     </section>
 
     <section id="slotSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">3</span>
+        <span class="step">4</span>
         <div>
-          <h2>候補日時を追加</h2>
-          <p>作業内容や場所まで入れると、後で判断しやすくなります。</p>
+          <h2>候補日時を追加する</h2>
+          <p>作業内容・場所・メモも入れられます。</p>
         </div>
       </div>
-      <form id="slotForm" class="grid-form">
-        <label>
-          日付
-          <input id="slotDate" type="date" required />
+      <form id="slotForm" class="form-grid">
+        <label>日付
+          <input name="date" type="date" required />
         </label>
-        <label>
-          開始時間
-          <input id="slotStartTime" type="time" required />
+        <label>開始時間
+          <input name="start_time" type="time" required />
         </label>
-        <label>
-          終了時間
-          <input id="slotEndTime" type="time" required />
+        <label>終了時間
+          <input name="end_time" type="time" required />
         </label>
-        <label>
-          作業内容
-          <input id="slotTaskTitle" placeholder="応募フォームの文章作成" />
+        <label>作業内容
+          <input name="task_title" placeholder="例：応募フォームの文章作成" />
         </label>
-        <label>
-          場所
-          <input id="slotLocation" placeholder="大学図書館 / Zoom" />
+        <label>場所
+          <input name="location" placeholder="例：大学図書館 / Zoom" />
         </label>
-        <label>
-          メモ
-          <input id="slotMemo" placeholder="企画概要と収益モデルを固める" />
+        <label>メモ
+          <input name="memo" placeholder="例：企画概要と収益モデルを固める" />
         </label>
-        <button type="submit" class="primary span-2">候補日時を追加</button>
+        <button type="submit" class="primary full">候補日時を追加</button>
       </form>
     </section>
 
     <section id="candidateSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">4</span>
+        <span class="step">5</span>
         <div>
           <h2>候補日時一覧・回答入力</h2>
-          <p>各候補に対して○△×とコメントを入力できます。</p>
+          <p>自分の名前で参加後、○△×を入力できます。</p>
         </div>
       </div>
       <div id="candidateList" class="candidate-list"></div>
@@ -157,45 +139,46 @@
 
     <section id="tableSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">5</span>
+        <span class="step">6</span>
         <div>
           <h2>回答表</h2>
-          <p>全員の回答と集計結果を表で確認します。</p>
+          <p>全員の回答と集計結果を表で確認できます。</p>
         </div>
       </div>
-      <div class="table-scroll">
+      <div class="table-wrap">
         <table id="summaryTable"></table>
       </div>
     </section>
 
     <section id="notesSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">6</span>
+        <span class="step">7</span>
         <div>
           <h2>ビジコン進行管理メモ</h2>
-          <p>確定した作業日に、やること・決定事項・宿題を記録できます。</p>
+          <p>確定した作業日のToDo・決定事項・宿題を記録します。</p>
         </div>
       </div>
-      <form id="notesForm" class="notes-form">
-        <label>
-          今日やること
-          <textarea id="noteTodo" rows="5" placeholder="・ターゲットを確定する&#10;・競合との差別化を考える"></textarea>
+      <form id="notesForm" class="form-grid">
+        <label class="full">今日やること
+          <textarea name="todo" rows="5" placeholder="・ターゲットを確定する&#10;・競合との差別化を考える"></textarea>
         </label>
-        <label>
-          決定事項
-          <textarea id="noteDecisions" rows="5" placeholder="・初期ターゲットは大学生&#10;・実証場所は大学周辺"></textarea>
+        <label class="full">決定事項
+          <textarea name="decisions" rows="5" placeholder="・初期ターゲットは大学生&#10;・実証場所は大学周辺"></textarea>
         </label>
-        <label>
-          次回までの宿題
-          <textarea id="noteHomework" rows="5" placeholder="・田丸：収益モデルを文章化&#10;・佐藤：競合調査"></textarea>
+        <label class="full">次回までの宿題
+          <textarea name="homework" rows="5" placeholder="・田丸：収益モデルを文章化&#10;・佐藤：競合調査"></textarea>
         </label>
-        <label>
-          担当者メモ
-          <textarea id="noteMemo" rows="4" placeholder="追加メモ"></textarea>
+        <label class="full">担当者メモ
+          <textarea name="memo" rows="4"></textarea>
         </label>
-        <button type="submit" class="primary">メモを保存</button>
+        <button type="submit" class="primary full">メモを保存</button>
       </form>
     </section>
   </main>
+
+  <footer class="footer">GitHub Pages + Supabase / ログインなしの最小構成</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./app.js?v=4"></script>
 </body>
 </html>

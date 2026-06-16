@@ -1,11 +1,11 @@
 // ============================================================
-// Supabase設定
-// 1. Supabase Project Settings > API から Project URL と anon public key をコピー
-// 2. 下の2つを書き換える
-// 3. service_role key / secret key は絶対に入れない
+// Supabase設定済み版
+// GitHub Pagesにそのまま上げ直してください。
+// secret key / service_role key は絶対に入れないでください。
 // ============================================================
-const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
+
 const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
@@ -19,576 +19,260 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
-
 const els = {
-  loading: $('loading'),
-  toast: $('toast'),
-  setupNotice: $('setupNotice'),
-  createGroupSection: $('createGroupSection'),
-  groupSection: $('groupSection'),
-  memberSection: $('memberSection'),
-  confirmedSection: $('confirmedSection'),
-  slotSection: $('slotSection'),
-  candidateSection: $('candidateSection'),
-  tableSection: $('tableSection'),
-  notesSection: $('notesSection'),
-  groupForm: $('groupForm'),
-  memberForm: $('memberForm'),
-  slotForm: $('slotForm'),
-  notesForm: $('notesForm'),
-  candidateList: $('candidateList'),
-  summaryTable: $('summaryTable'),
+  loading: $('loading'), toast: $('toast'), setupNotice: $('setupNotice'),
+  createGroupSection: $('createGroupSection'), groupSection: $('groupSection'), memberSection: $('memberSection'),
+  confirmedSection: $('confirmedSection'), slotSection: $('slotSection'), candidateSection: $('candidateSection'),
+  tableSection: $('tableSection'), notesSection: $('notesSection'), groupForm: $('groupForm'), memberForm: $('memberForm'),
+  slotForm: $('slotForm'), notesForm: $('notesForm'), candidateList: $('candidateList'), summaryTable: $('summaryTable'),
 };
 
 function isConfigured() {
-  return Boolean(
-    sb &&
-    SUPABASE_URL.startsWith('https://') &&
-    !SUPABASE_URL.includes('YOUR-PROJECT') &&
-    SUPABASE_ANON_KEY &&
-    SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY'
-  );
+  return Boolean(sb && SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('YOUR-PROJECT') && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY');
 }
-
-function setLoading(isLoading) {
-  els.loading.classList.toggle('is-hidden', !isLoading);
-}
-
+function setLoading(v) { els.loading.classList.toggle('is-hidden', !v); }
 function showToast(message, type = 'info') {
   els.toast.textContent = message;
   els.toast.className = `toast ${type === 'error' ? 'error' : ''}`;
   els.toast.classList.remove('is-hidden');
-  window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => els.toast.classList.add('is-hidden'), 3600);
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => els.toast.classList.add('is-hidden'), 3800);
 }
-
 function fail(message, error) {
   console.error(message, error);
-  const detail = error?.message ? `：${error.message}` : '';
-  showToast(`${message}${detail}`, 'error');
+  showToast(`${message}${error?.message ? '：' + error.message : ''}`, 'error');
 }
-
-function escapeHtml(value = '') {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+function esc(v = '') {
+  return String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
 }
-
-function formatDate(dateString) {
-  if (!dateString) return '-';
-  const date = new Date(`${dateString}T00:00:00`);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+function jpDate(date) {
+  if (!date) return '';
+  const d = new Date(`${date}T00:00:00`);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
-
-function formatTime(timeString) {
-  return String(timeString || '').slice(0, 5);
-}
-
-function formatSlot(slot) {
-  return `${formatDate(slot.date)} ${formatTime(slot.start_time)}〜${formatTime(slot.end_time)}`;
-}
-
-function statusToMark(status) {
+function hm(t) { return String(t || '').slice(0,5); }
+function statusMark(status) {
   if (status === 'available') return '○';
   if (status === 'maybe') return '△';
   if (status === 'unavailable') return '×';
-  return '未回答';
+  return '未';
 }
-
 function statusClass(status) {
-  return status || 'unanswered';
+  return status ? `status-${status}` : 'status-none';
 }
-
-function getLocalMemberKey(groupId) {
-  return `bizcon-scheduler-member-${groupId}`;
-}
-
-function getMyResponse(slotId) {
-  if (!state.currentMember) return null;
-  return state.responses.find((r) => r.member_id === state.currentMember.id && r.time_slot_id === slotId) || null;
-}
-
-function getSlotResponses(slotId) {
-  return state.responses.filter((r) => r.time_slot_id === slotId);
-}
-
-function countStatuses(slotId) {
-  const rows = getSlotResponses(slotId);
-  return {
-    available: rows.filter((r) => r.status === 'available').length,
-    maybe: rows.filter((r) => r.status === 'maybe').length,
-    unavailable: rows.filter((r) => r.status === 'unavailable').length,
-  };
-}
-
-function getJudgements() {
-  if (!state.slots.length) return new Map();
-  const counts = state.slots.map((slot) => ({ slot, ...countStatuses(slot.id) }));
-  const bestAvailable = Math.max(...counts.map((c) => c.available));
-  const bestUnavailable = Math.min(...counts.filter((c) => c.available === bestAvailable).map((c) => c.unavailable));
-
-  const map = new Map();
-  counts.forEach((c) => {
-    let label = '候補';
-    let cls = 'candidate';
-    if (c.available === bestAvailable && c.unavailable === bestUnavailable && c.available > 0) {
-      label = '最有力';
-      cls = 'best';
-    } else if (c.unavailable >= Math.max(2, Math.ceil(state.members.length / 2))) {
-      label = '微妙';
-      cls = 'weak';
-    } else if (c.available === 0 && c.maybe === 0) {
-      label = '未回答';
-      cls = '';
-    }
-    map.set(c.slot.id, { label, cls });
-  });
-  return map;
+function currentUrl() {
+  const base = location.href.split('?')[0];
+  return `${base}?group=${state.groupId}`;
 }
 
 async function init() {
   if (!isConfigured()) {
     els.setupNotice.classList.remove('is-hidden');
-    setLoading(false);
     return;
   }
-
   bindEvents();
-
-  if (state.groupId) {
-    await loadGroup();
-  } else {
-    setLoading(false);
-  }
+  if (state.groupId) await loadGroup();
 }
-
 function bindEvents() {
-  els.groupForm.addEventListener('submit', handleCreateGroup);
-  els.memberForm.addEventListener('submit', handleJoinMember);
-  els.slotForm.addEventListener('submit', handleCreateSlot);
-  els.notesForm.addEventListener('submit', handleSaveNotes);
-  $('copyUrlButton').addEventListener('click', copyShareUrl);
+  els.groupForm.addEventListener('submit', createGroup);
+  els.memberForm.addEventListener('submit', joinMember);
+  els.slotForm.addEventListener('submit', addSlot);
+  els.notesForm.addEventListener('submit', saveNotes);
+  $('copyUrlBtn')?.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(currentUrl());
+    showToast('共有URLをコピーしました');
+  });
 }
 
-async function handleCreateGroup(event) {
-  event.preventDefault();
-  setLoading(true);
-  try {
-    const payload = {
-      name: $('groupName').value.trim(),
-      description: $('groupDescription').value.trim() || null,
-      purpose: $('groupPurpose').value.trim() || null,
-      admin_name: $('adminName').value.trim() || null,
-    };
-    const { data, error } = await sb.from('groups').insert(payload).select().single();
-    if (error) throw error;
-    const url = new URL(location.href);
-    url.searchParams.set('group', data.id);
-    history.pushState({}, '', url.toString());
-    state.groupId = data.id;
-    state.group = data;
-    showToast('グループを作成しました。共有URLを送れます。');
-    await loadGroup();
-  } catch (error) {
-    fail('グループ作成に失敗しました', error);
-  } finally {
-    setLoading(false);
-  }
+async function createGroup(e) {
+  e.preventDefault(); setLoading(true);
+  const f = new FormData(e.currentTarget);
+  const payload = {
+    name: f.get('name')?.trim(), description: f.get('description')?.trim(),
+    purpose: f.get('purpose')?.trim(), admin_name: f.get('admin_name')?.trim(),
+  };
+  const { data, error } = await sb.from('groups').insert(payload).select().single();
+  setLoading(false);
+  if (error) return fail('グループ作成に失敗しました', error);
+  location.href = `${location.href.split('?')[0]}?group=${data.id}`;
 }
 
 async function loadGroup() {
   setLoading(true);
-  try {
-    const { data: group, error: groupError } = await sb.from('groups').select('*').eq('id', state.groupId).single();
-    if (groupError) throw groupError;
-    state.group = group;
-
-    const savedMemberId = localStorage.getItem(getLocalMemberKey(state.groupId));
-    await refreshAll();
-    if (savedMemberId) {
-      state.currentMember = state.members.find((m) => m.id === savedMemberId) || null;
-    }
-    render();
-  } catch (error) {
-    fail('グループの読み込みに失敗しました。URLが正しいか確認してください', error);
-  } finally {
-    setLoading(false);
-  }
+  const { data, error } = await sb.from('groups').select('*').eq('id', state.groupId).single();
+  if (error) { setLoading(false); return fail('グループ読み込みに失敗しました', error); }
+  state.group = data;
+  await loadAll();
+  setLoading(false);
+  render();
 }
-
-async function refreshAll() {
-  const [membersRes, slotsRes, responsesRes, notesRes] = await Promise.all([
+async function loadAll() {
+  const [members, slots, responses, notes] = await Promise.all([
     sb.from('members').select('*').eq('group_id', state.groupId).order('created_at'),
     sb.from('time_slots').select('*').eq('group_id', state.groupId).order('date').order('start_time'),
     sb.from('responses').select('*').eq('group_id', state.groupId),
     sb.from('meeting_notes').select('*').eq('group_id', state.groupId),
   ]);
-
-  for (const result of [membersRes, slotsRes, responsesRes, notesRes]) {
-    if (result.error) throw result.error;
-  }
-  state.members = membersRes.data || [];
-  state.slots = slotsRes.data || [];
-  state.responses = responsesRes.data || [];
-  state.notes = notesRes.data || [];
+  for (const r of [members, slots, responses, notes]) if (r.error) throw r.error;
+  state.members = members.data || [];
+  state.slots = slots.data || [];
+  state.responses = responses.data || [];
+  state.notes = notes.data || [];
+  const saved = localStorage.getItem(`member:${state.groupId}`);
+  state.currentMember = state.members.find(m => m.id === saved) || null;
 }
-
 function render() {
-  const hasGroup = Boolean(state.group);
-  els.createGroupSection.classList.toggle('is-hidden', hasGroup);
-  els.groupSection.classList.toggle('is-hidden', !hasGroup);
-  els.memberSection.classList.toggle('is-hidden', !hasGroup);
-  els.slotSection.classList.toggle('is-hidden', !hasGroup);
-  els.candidateSection.classList.toggle('is-hidden', !hasGroup);
-  els.tableSection.classList.toggle('is-hidden', !hasGroup);
-
-  if (!hasGroup) return;
-
-  $('currentGroupName').textContent = state.group.name;
-  $('currentGroupDescription').textContent = state.group.description || '';
-  $('currentGroupPurpose').textContent = state.group.purpose || '';
-  $('shareUrl').value = location.href;
-
-  renderCurrentMember();
-  renderConfirmed();
-  renderCandidates();
-  renderSummaryTable();
-  renderNotesForm();
+  els.createGroupSection.classList.add('is-hidden');
+  for (const el of [els.groupSection, els.memberSection, els.confirmedSection, els.slotSection, els.candidateSection, els.tableSection]) el.classList.remove('is-hidden');
+  $('groupName').textContent = state.group.name;
+  $('groupDescription').textContent = state.group.description || '';
+  $('groupPurpose').textContent = state.group.purpose || '';
+  $('shareUrl').textContent = currentUrl();
+  renderMembers(); renderConfirmed(); renderCandidates(); renderTable(); renderNotes();
 }
-
-function renderCurrentMember() {
+function renderMembers() {
   const box = $('currentMemberBox');
-  if (!state.currentMember) {
-    box.classList.add('is-hidden');
-    return;
-  }
-  box.classList.remove('is-hidden');
-  box.textContent = `現在の回答者：${state.currentMember.name}${state.currentMember.role_memo ? `（${state.currentMember.role_memo}）` : ''}`;
+  if (state.currentMember) {
+    box.classList.remove('is-hidden');
+    box.innerHTML = `現在の回答者：<b>${esc(state.currentMember.name)}</b>${state.currentMember.role_memo ? ` / ${esc(state.currentMember.role_memo)}` : ''}`;
+  } else box.classList.add('is-hidden');
+  $('memberList').innerHTML = state.members.length ? state.members.map(m => `<span class="pill">${esc(m.name)}${m.role_memo ? `：${esc(m.role_memo)}` : ''}</span>`).join('') : '<div class="empty">まだメンバーがいません。</div>';
 }
-
-async function handleJoinMember(event) {
-  event.preventDefault();
-  const name = $('memberName').value.trim();
-  const roleMemo = $('memberRoleMemo').value.trim();
-  if (!name) return;
-
-  setLoading(true);
-  try {
-    const sameName = state.members.find((m) => m.name.trim() === name);
-    if (sameName) {
-      const useExisting = confirm(`「${name}」は既に参加しています。既存メンバーとして回答しますか？\nキャンセルするとメモだけ更新します。`);
-      if (useExisting) {
-        state.currentMember = sameName;
-      } else {
-        const { data, error } = await sb.from('members').update({ role_memo: roleMemo || null }).eq('id', sameName.id).select().single();
-        if (error) throw error;
-        state.currentMember = data;
-      }
-    } else {
-      const { data, error } = await sb.from('members').insert({
-        group_id: state.groupId,
-        name,
-        role_memo: roleMemo || null,
-      }).select().single();
-      if (error) throw error;
-      state.currentMember = data;
-    }
-    localStorage.setItem(getLocalMemberKey(state.groupId), state.currentMember.id);
-    await refreshAll();
-    state.currentMember = state.members.find((m) => m.id === state.currentMember.id) || state.currentMember;
-    showToast('メンバー情報を保存しました。');
-    render();
-  } catch (error) {
-    fail('メンバー登録に失敗しました', error);
-  } finally {
-    setLoading(false);
+async function joinMember(e) {
+  e.preventDefault(); setLoading(true);
+  const f = new FormData(e.currentTarget);
+  const name = f.get('name')?.trim(); const role_memo = f.get('role_memo')?.trim();
+  const existing = state.members.find(m => m.name === name);
+  if (existing) {
+    if (role_memo && role_memo !== existing.role_memo) await sb.from('members').update({ role_memo }).eq('id', existing.id);
+    localStorage.setItem(`member:${state.groupId}`, existing.id);
+    await loadAll(); setLoading(false); render(); showToast('既存メンバーとして参加しました'); return;
   }
+  const { data, error } = await sb.from('members').insert({ group_id: state.groupId, name, role_memo }).select().single();
+  if (error) { setLoading(false); return fail('メンバー登録に失敗しました', error); }
+  localStorage.setItem(`member:${state.groupId}`, data.id);
+  await loadAll(); setLoading(false); render(); showToast('メンバーとして参加しました');
 }
-
-async function handleCreateSlot(event) {
-  event.preventDefault();
-  setLoading(true);
-  try {
-    const payload = {
-      group_id: state.groupId,
-      date: $('slotDate').value,
-      start_time: $('slotStartTime').value,
-      end_time: $('slotEndTime').value,
-      task_title: $('slotTaskTitle').value.trim() || null,
-      location: $('slotLocation').value.trim() || null,
-      memo: $('slotMemo').value.trim() || null,
-    };
-    const { error } = await sb.from('time_slots').insert(payload);
-    if (error) throw error;
-    els.slotForm.reset();
-    await refreshAll();
-    showToast('候補日時を追加しました。');
-    render();
-  } catch (error) {
-    fail('候補日時の追加に失敗しました', error);
-  } finally {
-    setLoading(false);
-  }
+async function addSlot(e) {
+  e.preventDefault(); setLoading(true);
+  const f = new FormData(e.currentTarget);
+  const payload = { group_id: state.groupId, date: f.get('date'), start_time: f.get('start_time'), end_time: f.get('end_time'), task_title: f.get('task_title')?.trim(), location: f.get('location')?.trim(), memo: f.get('memo')?.trim() };
+  const { error } = await sb.from('time_slots').insert(payload);
+  if (error) { setLoading(false); return fail('候補日時の追加に失敗しました', error); }
+  e.currentTarget.reset(); await loadAll(); setLoading(false); render(); showToast('候補日時を追加しました');
 }
-
+function counts(slotId) {
+  const rows = state.responses.filter(r => r.time_slot_id === slotId);
+  return { available: rows.filter(r => r.status === 'available').length, maybe: rows.filter(r => r.status === 'maybe').length, unavailable: rows.filter(r => r.status === 'unavailable').length };
+}
+function bestSlotId() {
+  if (!state.slots.length) return null;
+  return [...state.slots].sort((a,b) => {
+    const ca = counts(a.id), cb = counts(b.id);
+    return (cb.available - ca.available) || (ca.unavailable - cb.unavailable) || (cb.maybe - ca.maybe);
+  })[0]?.id;
+}
+function judge(slot) {
+  const c = counts(slot.id);
+  if (slot.id === bestSlotId() && (c.available > 0 || c.maybe > 0)) return '最有力';
+  if (c.unavailable >= Math.max(1, Math.ceil(state.members.length / 2))) return '微妙';
+  if (c.available + c.maybe > 0) return '候補';
+  return '未回答';
+}
 function renderCandidates() {
-  const judgements = getJudgements();
-  if (!state.slots.length) {
-    els.candidateList.innerHTML = '<div class="empty">まだ候補日時がありません。</div>';
-    return;
-  }
-
-  els.candidateList.innerHTML = state.slots.map((slot) => {
-    const counts = countStatuses(slot.id);
-    const judgement = judgements.get(slot.id) || { label: '未回答', cls: '' };
-    const myResponse = getMyResponse(slot.id);
-    const confirmed = slot.is_confirmed ? '<span class="badge best">確定済み</span>' : `<button class="secondary" data-confirm-slot="${slot.id}" type="button">この日時で確定</button>`;
-    return `
-      <article class="slot-card">
-        <div class="slot-top">
-          <div>
-            <h3>${escapeHtml(formatSlot(slot))}</h3>
-            <p class="slot-meta">
-              ${escapeHtml(slot.task_title || '作業内容未設定')}<br>
-              場所：${escapeHtml(slot.location || '未設定')}<br>
-              ${slot.memo ? `メモ：${escapeHtml(slot.memo)}` : ''}
-            </p>
-          </div>
-          <div>${confirmed}</div>
-        </div>
-        <div>
-          <span class="badge ${judgement.cls}">${escapeHtml(judgement.label)}</span>
-          <span class="badge">○ ${counts.available}</span>
-          <span class="badge">△ ${counts.maybe}</span>
-          <span class="badge">× ${counts.unavailable}</span>
-        </div>
-        <form class="response-form" data-slot-id="${slot.id}">
-          <label>参加可否
-            <select class="status-select ${statusClass(myResponse?.status)}" ${state.currentMember ? '' : 'disabled'}>
-              <option value="" ${!myResponse ? 'selected' : ''}>未回答</option>
-              <option value="available" ${myResponse?.status === 'available' ? 'selected' : ''}>○ 参加できる</option>
-              <option value="maybe" ${myResponse?.status === 'maybe' ? 'selected' : ''}>△ 条件付き</option>
-              <option value="unavailable" ${myResponse?.status === 'unavailable' ? 'selected' : ''}>× 参加できない</option>
-            </select>
-          </label>
-          <label>コメント
-            <input class="response-comment" placeholder="19時からなら参加できます" value="${escapeHtml(myResponse?.comment || '')}" ${state.currentMember ? '' : 'disabled'} />
-          </label>
-          <button class="primary" type="submit" ${state.currentMember ? '' : 'disabled'}>保存</button>
-        </form>
-      </article>
-    `;
-  }).join('');
-
-  document.querySelectorAll('.response-form').forEach((form) => {
-    form.addEventListener('submit', handleSaveResponse);
-  });
-  document.querySelectorAll('[data-confirm-slot]').forEach((button) => {
-    button.addEventListener('click', () => handleConfirmSlot(button.dataset.confirmSlot));
-  });
-}
-
-async function handleSaveResponse(event) {
-  event.preventDefault();
-  if (!state.currentMember) {
-    showToast('先にメンバー名を入力してください。', 'error');
-    return;
-  }
-
-  const form = event.currentTarget;
-  const slotId = form.dataset.slotId;
-  const status = form.querySelector('.status-select').value;
-  const comment = form.querySelector('.response-comment').value.trim();
-
-  if (!status) {
-    showToast('○△×のどれかを選んでください。', 'error');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const existing = getMyResponse(slotId);
-    if (existing) {
-      const { error } = await sb.from('responses').update({
-        status,
-        comment: comment || null,
-        updated_at: new Date().toISOString(),
-      }).eq('id', existing.id);
-      if (error) throw error;
-    } else {
-      const { error } = await sb.from('responses').insert({
-        group_id: state.groupId,
-        member_id: state.currentMember.id,
-        time_slot_id: slotId,
-        status,
-        comment: comment || null,
-      });
-      if (error) throw error;
-    }
-    await refreshAll();
-    showToast('回答を保存しました。');
-    render();
-  } catch (error) {
-    fail('回答の保存に失敗しました', error);
-  } finally {
-    setLoading(false);
-  }
-}
-
-async function handleConfirmSlot(slotId) {
-  const ok = confirm('この日時で確定しますか？他の確定日時は解除されます。');
-  if (!ok) return;
-  setLoading(true);
-  try {
-    await sb.from('time_slots').update({ is_confirmed: false }).eq('group_id', state.groupId);
-    const { error } = await sb.from('time_slots').update({ is_confirmed: true }).eq('id', slotId);
-    if (error) throw error;
-    await refreshAll();
-    showToast('確定日時を登録しました。');
-    render();
-  } catch (error) {
-    fail('確定日時の登録に失敗しました', error);
-  } finally {
-    setLoading(false);
-  }
-}
-
-function renderConfirmed() {
-  const slot = state.slots.find((s) => s.is_confirmed);
-  els.confirmedSection.classList.toggle('is-hidden', !slot);
-  if (!slot) return;
-
-  const rows = getSlotResponses(slot.id);
-  const availableNames = rows.filter((r) => r.status === 'available').map((r) => memberName(r.member_id));
-  const maybeNames = rows.filter((r) => r.status === 'maybe').map((r) => memberName(r.member_id));
-
-  $('confirmedContent').innerHTML = `
-    <div class="confirmed-box">
-      <div class="confirmed-grid">
-        <div class="info-item"><strong>日付・時間</strong>${escapeHtml(formatSlot(slot))}</div>
-        <div class="info-item"><strong>作業内容</strong>${escapeHtml(slot.task_title || '未設定')}</div>
-        <div class="info-item"><strong>場所</strong>${escapeHtml(slot.location || '未設定')}</div>
-        <div class="info-item"><strong>メモ</strong>${escapeHtml(slot.memo || 'なし')}</div>
-        <div class="info-item"><strong>参加予定者</strong>${escapeHtml(availableNames.join('、') || 'なし')}</div>
-        <div class="info-item"><strong>条件付き参加者</strong>${escapeHtml(maybeNames.join('、') || 'なし')}</div>
+  if (!state.slots.length) { els.candidateList.innerHTML = '<div class="empty">まだ候補日時がありません。</div>'; return; }
+  els.candidateList.innerHTML = state.slots.map(slot => {
+    const my = state.currentMember ? state.responses.find(r => r.time_slot_id === slot.id && r.member_id === state.currentMember.id) : null;
+    const c = counts(slot.id);
+    return `<article class="slot-card ${slot.is_confirmed ? 'confirmed' : ''}">
+      <div class="slot-top">
+        <div><div class="slot-time">${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</div>
+        <div class="slot-meta">作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}<br>メモ：${esc(slot.memo || '')}</div></div>
+        <div class="judge">${slot.is_confirmed ? '確定' : judge(slot)}</div>
       </div>
-    </div>
-  `;
-}
-
-function memberName(memberId) {
-  return state.members.find((m) => m.id === memberId)?.name || '不明';
-}
-
-function renderSummaryTable() {
-  if (!state.slots.length) {
-    els.summaryTable.innerHTML = '<tbody><tr><td class="empty">まだ候補日時がありません。</td></tr></tbody>';
-    return;
-  }
-
-  const judgements = getJudgements();
-  const headerMembers = state.members.map((m) => `<th>${escapeHtml(m.name)}</th>`).join('');
-  const rows = state.slots.map((slot) => {
-    const counts = countStatuses(slot.id);
-    const judgement = judgements.get(slot.id) || { label: '未回答', cls: '' };
-    const memberCells = state.members.map((member) => {
-      const response = state.responses.find((r) => r.member_id === member.id && r.time_slot_id === slot.id);
-      return `
-        <td>
-          <span class="mark ${statusClass(response?.status)}">${statusToMark(response?.status)}</span>
-          ${response?.comment ? `<span class="comment">${escapeHtml(response.comment)}</span>` : ''}
-        </td>
-      `;
-    }).join('');
-    return `
-      <tr>
-        <td>${escapeHtml(formatSlot(slot))}</td>
-        <td>${escapeHtml(slot.task_title || '-')}</td>
-        <td>${escapeHtml(slot.location || '-')}</td>
-        ${memberCells}
-        <td class="count">${counts.available}</td>
-        <td class="count">${counts.maybe}</td>
-        <td class="count">${counts.unavailable}</td>
-        <td><span class="badge ${judgement.cls}">${escapeHtml(judgement.label)}</span></td>
-      </tr>
-    `;
+      <div class="slot-meta">○ ${c.available} / △ ${c.maybe} / × ${c.unavailable}</div>
+      <div class="response-row">
+        <label>参加可否
+          <select data-slot="${slot.id}" class="status-input" ${!state.currentMember ? 'disabled' : ''}>
+            <option value="">未回答</option>
+            <option value="available" ${my?.status === 'available' ? 'selected' : ''}>○ 参加できる</option>
+            <option value="maybe" ${my?.status === 'maybe' ? 'selected' : ''}>△ 条件付き</option>
+            <option value="unavailable" ${my?.status === 'unavailable' ? 'selected' : ''}>× 参加できない</option>
+          </select>
+        </label>
+        <label>コメント
+          <input data-slot="${slot.id}" class="comment-input" value="${esc(my?.comment || '')}" placeholder="例：19時からなら参加できます" ${!state.currentMember ? 'disabled' : ''} />
+        </label>
+        <button type="button" class="secondary save-response" data-slot="${slot.id}" ${!state.currentMember ? 'disabled' : ''}>回答保存</button>
+      </div>
+      <button type="button" class="primary confirm-slot" data-slot="${slot.id}" style="margin-top:12px;">この日時で確定</button>
+    </article>`;
   }).join('');
-
-  els.summaryTable.innerHTML = `
-    <thead>
-      <tr>
-        <th>候補日時</th>
-        <th>作業内容</th>
-        <th>場所</th>
-        ${headerMembers}
-        <th>○人数</th>
-        <th>△人数</th>
-        <th>×人数</th>
-        <th>判定</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  `;
+  document.querySelectorAll('.save-response').forEach(b => b.addEventListener('click', saveResponse));
+  document.querySelectorAll('.confirm-slot').forEach(b => b.addEventListener('click', confirmSlot));
 }
-
-function renderNotesForm() {
-  const confirmedSlot = state.slots.find((s) => s.is_confirmed);
-  els.notesSection.classList.toggle('is-hidden', !confirmedSlot);
-  if (!confirmedSlot) return;
-  const note = state.notes.find((n) => n.time_slot_id === confirmedSlot.id);
-  $('noteTodo').value = note?.todo || '';
-  $('noteDecisions').value = note?.decisions || '';
-  $('noteHomework').value = note?.homework || '';
-  $('noteMemo').value = note?.memo || '';
-}
-
-async function handleSaveNotes(event) {
-  event.preventDefault();
-  const confirmedSlot = state.slots.find((s) => s.is_confirmed);
-  if (!confirmedSlot) return;
-
+async function saveResponse(e) {
+  if (!state.currentMember) return showToast('先にメンバーとして参加してください', 'error');
+  const slotId = e.currentTarget.dataset.slot;
+  const status = document.querySelector(`.status-input[data-slot="${slotId}"]`).value;
+  const comment = document.querySelector(`.comment-input[data-slot="${slotId}"]`).value.trim();
+  if (!status) return showToast('○△×を選択してください', 'error');
   setLoading(true);
-  try {
-    const existing = state.notes.find((n) => n.time_slot_id === confirmedSlot.id);
-    const payload = {
-      group_id: state.groupId,
-      time_slot_id: confirmedSlot.id,
-      todo: $('noteTodo').value.trim() || null,
-      decisions: $('noteDecisions').value.trim() || null,
-      homework: $('noteHomework').value.trim() || null,
-      memo: $('noteMemo').value.trim() || null,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (existing) {
-      const { error } = await sb.from('meeting_notes').update(payload).eq('id', existing.id);
-      if (error) throw error;
-    } else {
-      const { error } = await sb.from('meeting_notes').insert(payload);
-      if (error) throw error;
-    }
-    await refreshAll();
-    showToast('進行管理メモを保存しました。');
-    render();
-  } catch (error) {
-    fail('メモの保存に失敗しました', error);
-  } finally {
-    setLoading(false);
-  }
+  const existing = state.responses.find(r => r.member_id === state.currentMember.id && r.time_slot_id === slotId);
+  const payload = { group_id: state.groupId, member_id: state.currentMember.id, time_slot_id: slotId, status, comment, updated_at: new Date().toISOString() };
+  const { error } = existing ? await sb.from('responses').update(payload).eq('id', existing.id) : await sb.from('responses').insert(payload);
+  if (error) { setLoading(false); return fail('回答保存に失敗しました', error); }
+  await loadAll(); setLoading(false); render(); showToast('回答を保存しました');
+}
+async function confirmSlot(e) {
+  const slotId = e.currentTarget.dataset.slot; setLoading(true);
+  const a = await sb.from('time_slots').update({ is_confirmed: false }).eq('group_id', state.groupId);
+  const b = await sb.from('time_slots').update({ is_confirmed: true }).eq('id', slotId);
+  if (a.error || b.error) { setLoading(false); return fail('確定日時の保存に失敗しました', a.error || b.error); }
+  await loadAll(); setLoading(false); render(); showToast('日時を確定しました');
+}
+function renderConfirmed() {
+  const slot = state.slots.find(s => s.is_confirmed);
+  if (!slot) { $('confirmedBox').className = 'empty'; $('confirmedBox').textContent = 'まだ確定した作業予定はありません。'; return; }
+  const avail = state.responses.filter(r => r.time_slot_id === slot.id && r.status === 'available').map(r => state.members.find(m => m.id === r.member_id)?.name).filter(Boolean);
+  const maybe = state.responses.filter(r => r.time_slot_id === slot.id && r.status === 'maybe').map(r => state.members.find(m => m.id === r.member_id)?.name).filter(Boolean);
+  $('confirmedBox').className = 'small-box confirmed';
+  $('confirmedBox').innerHTML = `<b>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</b><br>作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}<br>参加予定者：${esc(avail.join('、') || 'なし')}<br>条件付き参加者：${esc(maybe.join('、') || 'なし')}<br>メモ：${esc(slot.memo || '')}`;
+}
+function renderTable() {
+  if (!state.slots.length) { els.summaryTable.innerHTML = '<tr><td>まだ候補日時がありません。</td></tr>'; return; }
+  const head = `<tr><th>候補日時</th><th>作業内容</th><th>場所</th>${state.members.map(m => `<th>${esc(m.name)}</th>`).join('')}<th>○人数</th><th>△人数</th><th>×人数</th><th>判定</th></tr>`;
+  const body = state.slots.map(slot => {
+    const c = counts(slot.id);
+    const memberCells = state.members.map(m => {
+      const r = state.responses.find(x => x.member_id === m.id && x.time_slot_id === slot.id);
+      return `<td><span class="status-badge ${statusClass(r?.status)}">${statusMark(r?.status)}</span>${r?.comment ? `<br><small>${esc(r.comment)}</small>` : ''}</td>`;
+    }).join('');
+    return `<tr><td>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</td><td>${esc(slot.task_title || '')}</td><td>${esc(slot.location || '')}</td>${memberCells}<td>${c.available}</td><td>${c.maybe}</td><td>${c.unavailable}</td><td class="judge">${slot.is_confirmed ? '確定' : judge(slot)}</td></tr>`;
+  }).join('');
+  els.summaryTable.innerHTML = head + body;
+}
+function renderNotes() {
+  const slot = state.slots.find(s => s.is_confirmed);
+  els.notesSection.classList.toggle('is-hidden', !slot);
+  if (!slot) return;
+  const note = state.notes.find(n => n.time_slot_id === slot.id);
+  els.notesForm.todo.value = note?.todo || '';
+  els.notesForm.decisions.value = note?.decisions || '';
+  els.notesForm.homework.value = note?.homework || '';
+  els.notesForm.memo.value = note?.memo || '';
+}
+async function saveNotes(e) {
+  e.preventDefault();
+  const slot = state.slots.find(s => s.is_confirmed);
+  if (!slot) return showToast('先に日時を確定してください', 'error');
+  setLoading(true);
+  const f = new FormData(e.currentTarget);
+  const existing = state.notes.find(n => n.time_slot_id === slot.id);
+  const payload = { group_id: state.groupId, time_slot_id: slot.id, todo: f.get('todo'), decisions: f.get('decisions'), homework: f.get('homework'), memo: f.get('memo'), updated_at: new Date().toISOString() };
+  const { error } = existing ? await sb.from('meeting_notes').update(payload).eq('id', existing.id) : await sb.from('meeting_notes').insert(payload);
+  if (error) { setLoading(false); return fail('メモ保存に失敗しました', error); }
+  await loadAll(); setLoading(false); render(); showToast('メモを保存しました');
 }
 
-async function copyShareUrl() {
-  try {
-    await navigator.clipboard.writeText($('shareUrl').value);
-    showToast('共有URLをコピーしました。');
-  } catch {
-    $('shareUrl').select();
-    document.execCommand('copy');
-    showToast('共有URLをコピーしました。');
-  }
-}
-
-init();
+init().catch(err => fail('初期化に失敗しました', err));
