@@ -3,77 +3,51 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>グループ予定調整</title>
-  <link rel="stylesheet" href="./style.css?v=4" />
+  <title>SAMPO QUEST 予定調整</title>
+  <link rel="stylesheet" href="./style.css?v=7" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
   <div id="toast" class="toast is-hidden"></div>
 
   <header class="hero">
-    <p class="eyebrow">BIZCON TEAM SCHEDULER</p>
-    <h1>グループ予定調整</h1>
-    <p class="lead">候補日時ごとの○△×を共有し、ビジコン・ゼミ・チーム活動の作業日を決めるためのWebアプリです。</p>
+    <p class="eyebrow">SAMPO QUEST TEAM BOARD</p>
+    <h1>ビジコン予定調整</h1>
+    <p class="lead">このURLを開くだけで、同じチームの予定表に入れます。グループURL・グループコードは使いません。</p>
   </header>
 
   <main class="container">
     <section id="setupNotice" class="notice is-hidden">
       <h2>Supabase設定が未完了です</h2>
-      <p><code>app.js</code> の <code>SUPABASE_URL</code> と <code>SUPABASE_ANON_KEY</code> を自分の値に変更してください。</p>
-    </section>
-
-    <section id="createGroupSection" class="card">
-      <div class="section-title">
-        <span class="step">1</span>
-        <div>
-          <h2>グループを作成する</h2>
-          <p>最初にチーム用の共有URLを作成します。</p>
-        </div>
-      </div>
-      <form id="groupForm" class="form-grid">
-        <label>グループ名
-          <input name="name" required value="SAMPO QUEST ビジコンチーム" />
-        </label>
-        <label>管理者名
-          <input name="admin_name" value="田丸" />
-        </label>
-        <label class="full">説明
-          <textarea name="description" rows="3">観光クロスオーバーコンテストに向けた作業予定調整</textarea>
-        </label>
-        <label class="full">目的
-          <textarea name="purpose" rows="3">全員が集まれる日時を決めて、企画書・スライド・発表準備を進める</textarea>
-        </label>
-        <button type="submit" class="primary full">グループを作成</button>
-      </form>
+      <p><code>app.js</code> の <code>SUPABASE_URL</code> と <code>SUPABASE_ANON_KEY</code> を確認してください。</p>
     </section>
 
     <section id="groupSection" class="card is-hidden">
       <div class="group-head">
         <div>
-          <p class="eyebrow">CURRENT GROUP</p>
-          <h2 id="groupName"></h2>
+          <p class="eyebrow">CURRENT TEAM</p>
+          <h2 id="groupName">読み込み中</h2>
           <p id="groupDescription" class="muted"></p>
           <p id="groupPurpose"></p>
         </div>
-        <button id="copyUrlBtn" class="secondary" type="button">共有URLをコピー</button>
+        <span class="mode-badge">固定チームモード</span>
       </div>
-      <div class="share-box">
-        <span>共有URL</span>
-        <code id="shareUrl"></code>
+      <div class="small-box compact">
+        参加者には、このGitHub PagesのアプリURLだけ送ればOKです。開くと自動でこのチームの予定表が表示されます。
       </div>
     </section>
 
     <section id="memberSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">2</span>
+        <span class="step">1</span>
         <div>
-          <h2>メンバーとして参加する</h2>
+          <h2>名前を入れて参加</h2>
           <p>同じ名前がある場合は既存メンバーとして扱います。</p>
         </div>
       </div>
       <form id="memberForm" class="form-grid">
         <label>メンバー名
-          <input name="name" required placeholder="例：田丸" />
+          <input name="name" required placeholder="例：田丸" autocomplete="name" />
         </label>
         <label>役割・メモ 任意
           <input name="role_memo" placeholder="例：収益モデル担当" />
@@ -86,7 +60,7 @@
 
     <section id="confirmedSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">3</span>
+        <span class="step">2</span>
         <div>
           <h2>確定した作業予定</h2>
           <p>候補から確定した日時を表示します。</p>
@@ -97,38 +71,89 @@
 
     <section id="slotSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">4</span>
+        <span class="step">3</span>
         <div>
-          <h2>候補日時を追加する</h2>
-          <p>作業内容・場所・メモも入れられます。</p>
+          <h2>候補日を追加</h2>
+          <p>日付を選んで、時間帯ボタンを押すだけで追加できます。</p>
         </div>
       </div>
-      <form id="slotForm" class="form-grid">
-        <label>日付
-          <input name="date" type="date" required />
+
+      <form id="slotForm" class="slot-form">
+        <label class="full">日付
+          <input id="slotDate" name="date" type="date" required />
         </label>
-        <label>開始時間
-          <input name="start_time" type="time" required />
-        </label>
-        <label>終了時間
-          <input name="end_time" type="time" required />
-        </label>
-        <label>作業内容
-          <input name="task_title" placeholder="例：応募フォームの文章作成" />
-        </label>
-        <label>場所
-          <input name="location" placeholder="例：大学図書館 / Zoom" />
-        </label>
-        <label>メモ
-          <input name="memo" placeholder="例：企画概要と収益モデルを固める" />
-        </label>
-        <button type="submit" class="primary full">候補日時を追加</button>
+
+        <div class="quick-section full">
+          <div class="quick-head">
+            <h3>時間帯</h3>
+            <span id="selectedTimeText" class="selected-text">未選択</span>
+          </div>
+          <div class="quick-grid" id="timePresetList">
+            <button type="button" class="chip" data-start="10:00" data-end="12:00">10:00〜12:00</button>
+            <button type="button" class="chip" data-start="13:00" data-end="16:00">13:00〜16:00</button>
+            <button type="button" class="chip" data-start="16:00" data-end="18:00">16:00〜18:00</button>
+            <button type="button" class="chip" data-start="18:00" data-end="21:00">18:00〜21:00</button>
+            <button type="button" class="chip" data-start="19:00" data-end="22:00">19:00〜22:00</button>
+          </div>
+        </div>
+
+        <div class="quick-section full">
+          <div class="quick-head">
+            <h3>作業内容</h3>
+            <span id="selectedTaskText" class="selected-text">未選択</span>
+          </div>
+          <div class="quick-grid" id="taskPresetList">
+            <button type="button" class="chip" data-task="企画整理">企画整理</button>
+            <button type="button" class="chip" data-task="応募フォーム作成">応募フォーム作成</button>
+            <button type="button" class="chip" data-task="スライド作成">スライド作成</button>
+            <button type="button" class="chip" data-task="発表練習">発表練習</button>
+            <button type="button" class="chip" data-task="競合調査">競合調査</button>
+            <button type="button" class="chip" data-task="収益モデル整理">収益モデル整理</button>
+          </div>
+        </div>
+
+        <div class="quick-section full">
+          <div class="quick-head">
+            <h3>場所</h3>
+            <span id="selectedLocationText" class="selected-text">未選択</span>
+          </div>
+          <div class="quick-grid" id="locationPresetList">
+            <button type="button" class="chip" data-location="大学図書館">大学図書館</button>
+            <button type="button" class="chip" data-location="Zoom">Zoom</button>
+            <button type="button" class="chip" data-location="教室">教室</button>
+            <button type="button" class="chip" data-location="カフェ">カフェ</button>
+            <button type="button" class="chip" data-location="オンライン">オンライン</button>
+          </div>
+        </div>
+
+        <details class="advanced full">
+          <summary>細かく指定する</summary>
+          <div class="form-grid inner-grid">
+            <label>開始時間
+              <input id="slotStart" name="start_time" type="time" required />
+            </label>
+            <label>終了時間
+              <input id="slotEnd" name="end_time" type="time" required />
+            </label>
+            <label>作業内容
+              <input id="slotTask" name="task_title" placeholder="例：応募フォームの文章作成" />
+            </label>
+            <label>場所
+              <input id="slotLocation" name="location" placeholder="例：大学図書館 / Zoom" />
+            </label>
+            <label class="full">メモ
+              <input name="memo" placeholder="例：企画概要と収益モデルを固める" />
+            </label>
+          </div>
+        </details>
+
+        <button type="submit" class="primary full big-button">候補日時を追加</button>
       </form>
     </section>
 
     <section id="candidateSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">5</span>
+        <span class="step">4</span>
         <div>
           <h2>候補日時一覧・回答入力</h2>
           <p>自分の名前で参加後、○△×を入力できます。</p>
@@ -139,7 +164,7 @@
 
     <section id="tableSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">6</span>
+        <span class="step">5</span>
         <div>
           <h2>回答表</h2>
           <p>全員の回答と集計結果を表で確認できます。</p>
@@ -152,7 +177,7 @@
 
     <section id="notesSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">7</span>
+        <span class="step">6</span>
         <div>
           <h2>ビジコン進行管理メモ</h2>
           <p>確定した作業日のToDo・決定事項・宿題を記録します。</p>
@@ -176,9 +201,9 @@
     </section>
   </main>
 
-  <footer class="footer">GitHub Pages + Supabase / ログインなしの最小構成</footer>
+  <footer class="footer">GitHub Pages + Supabase / 固定チーム専用の最小構成</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=4"></script>
+  <script src="./app.js?v=7"></script>
 </body>
 </html>

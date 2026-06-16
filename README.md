@@ -1,84 +1,96 @@
-# グループ予定調整 Webアプリ
+# SAMPO QUEST ビジコン予定調整アプリ
 
-ビジコン・ゼミ・チーム活動で、候補日時ごとの参加可否を共有するための最小構成Webアプリです。
+GitHub PagesとSupabaseで動く、ビジコンチーム用の予定調整Webアプリです。
 
-## 構成
+この版では、グループURLやグループコードを使いません。アプリURLを開くと、自動で `SAMPO QUEST ビジコンチーム` の共有予定表が表示されます。
 
-- `index.html`
-- `style.css`
-- `app.js`
-- `supabase-schema.sql`
-- `README.md`
+## 機能
 
-HTML/CSS/JavaScriptだけで作っています。フレームワークは使っていません。
+- メンバー名を入力して参加
+- 日付＋時間帯ボタンで候補日時を簡単追加
+- 作業内容・場所をプリセットボタンで入力
+- 候補日時ごとに ○ / △ / × を回答
+- コメント入力
+- 全員の回答表
+- 最有力候補の判定
+- 確定日時の登録
+- 確定日に対するToDo、決定事項、宿題、担当者メモ
 
-## Supabase設定
+## ファイル構成
 
-この版の `app.js` には以下を設定済みです。
+```txt
+index.html
+style.css
+app.js
+supabase-schema.sql
+README.md
+```
+
+## GitHub Pagesで公開する方法
+
+1. GitHubのリポジトリを開く
+2. この5ファイルをアップロードする
+3. `Settings` → `Pages`
+4. Branchを `main`、Folderを `/root` にする
+5. Save
+6. 表示されたGitHub PagesのURLを開く
+
+## Supabaseの設定
+
+### 1. SQLを実行する
+
+Supabaseの管理画面で、左メニューの `SQL Editor` を開きます。
+
+`supabase-schema.sql` の中身をすべて貼り付けて、`Run` を押してください。
+
+既に前のSQLを実行していても、再実行できます。今回のSQLでは `groups` テーブルに `app_key` を追加します。
+
+### 2. テーブル確認
+
+`Table Editor` で以下のテーブルがあればOKです。
+
+```txt
+groups
+members
+time_slots
+responses
+meeting_notes
+```
+
+## Supabase URLと公開キー
+
+`app.js` の上部で設定します。
 
 ```js
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
 ```
 
-`sb_publishable_...` は公開Webアプリで使う公開用キーです。`service_role` や `secret` は絶対に入れないでください。
+`/rest/v1/` は入れません。
 
-## SupabaseでSQLを実行する方法
-
-1. Supabaseのプロジェクトを開く
-2. 左メニューの `SQL Editor` を開く
-3. `New query` を押す
-4. `supabase-schema.sql` の中身を全部貼る
-5. `Run` を押す
-6. `Table Editor` に以下があるか確認する
-   - `groups`
-   - `members`
-   - `time_slots`
-   - `responses`
-   - `meeting_notes`
-
-## RLSポリシー
-
-RLSは有効化しています。最初は招待URLを知っている人が使える前提なので、anonユーザーに以下を許可しています。
-
-- select
-- insert
-- update
-
-削除は許可していません。
-
-## GitHub Pagesで公開する方法
-
-1. GitHubリポジトリに以下をアップロードする
-   - `index.html`
-   - `style.css`
-   - `app.js`
-   - `README.md`
-   - `supabase-schema.sql`
-2. `Settings` → `Pages`
-3. `Branch` を `main`、フォルダを `/root` にする
-4. `Save`
-5. 表示されたGitHub Pages URLを開く
-
-## キャッシュ対策
-
-この版では `index.html` 内で以下のように読み込んでいます。
-
-```html
-<link rel="stylesheet" href="./style.css?v=4" />
-<script src="./app.js?v=4"></script>
-```
-
-前の古い `app.js` がブラウザに残っていても、新しいファイルを読み込みやすくしています。
+`service_role` や `sb_secret_` は絶対にGitHubに置かないでください。
 
 ## 使い方
 
-1. トップ画面でグループを作成する
-2. 発行された `?group=...` 付きURLをコピーする
-3. LINEなどで共有する
-4. メンバーが名前を入力して参加する
-5. 候補日時を追加する
-6. 各メンバーが○△×とコメントを入力する
-7. 回答表で集まりやすい日時を確認する
-8. 「この日時で確定」を押す
-9. 確定した作業日に対して、ToDo・決定事項・宿題を保存する
+1. GitHub PagesのアプリURLを開く
+2. 名前を入力して参加
+3. 日付を選ぶ
+4. 時間帯ボタンを押す
+5. 作業内容・場所を押す
+6. 候補日時を追加
+7. 各メンバーが ○ / △ / × を回答
+8. 回答表で集まりやすい日時を見る
+9. 「この日時で確定」を押す
+10. 確定日のToDoや宿題を記録する
+
+## 固定チームモードについて
+
+このアプリは `app_key = sampo-quest-main` のグループを自動で探します。
+
+見つからない場合は、アプリが自動で以下のグループを作成します。
+
+```txt
+SAMPO QUEST ビジコンチーム
+```
+
+そのため、共有URLやグループコードを使わず、同じアプリURLだけでチーム内の予定調整ができます。
