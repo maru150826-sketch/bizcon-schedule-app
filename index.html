@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SAMPO QUEST 予定調整</title>
-  <link rel="stylesheet" href="./style.css?v=15" />
+  <title>SAMPO QUEST 空き時間調整</title>
+  <link rel="stylesheet" href="./style.css?v=11" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
@@ -12,8 +12,8 @@
 
   <header class="hero">
     <p class="eyebrow">SAMPO QUEST TEAM BOARD</p>
-    <h1>ビジコン予定調整</h1>
-    <p class="lead">このアプリを開くだけで、チーム全員の候補日・○△×・未回答者を確認できます。</p>
+    <h1>空き時間から決める予定調整</h1>
+    <p class="lead">候補日を先に決めず、各メンバーが空いている時間を入力します。アプリが全員または多くの人が集まれる日時を提示します。</p>
   </header>
 
   <main class="container">
@@ -28,19 +28,18 @@
           <p class="eyebrow">CURRENT TEAM</p>
           <h2 id="groupName">読み込み中</h2>
           <p id="groupDescription" class="muted"></p>
-          <p id="groupPurpose"></p>
         </div>
-        <button id="refreshButton" type="button" class="secondary">最新状況を読み込む</button>
+        <button id="refreshButton" class="secondary" type="button">最新状況を読み込む</button>
       </div>
       <div class="guide-box">
-        <b>使い方</b>
+        <b>今回の使い方</b>
         <ol>
-          <li>既存の名前を選ぶ。なければ自分の名前を追加する</li>
-          <li>候補日を追加する場合は、日付・30分刻みの時間・作業内容・場所を選ぶ</li>
-          <li>候補日に対して ○ / △ / × を押すだけで回答完了。必要なら候補日はあとから編集できます</li>
-          <li>○+△が多く、×が少ない日程を確定する</li>
+          <li>自分の名前を選ぶ</li>
+          <li>自分が空いている日付と時間を何個でも入力する</li>
+          <li>アプリが「全員OK」「多くの人がOK」の日時を自動で出す</li>
+          <li>よさそうな日時を「この時間で確定」する</li>
         </ol>
-        <p>回答状況は120秒ごとに自動更新されます。手動更新もできます。投票は押した瞬間に画面へ反映されます。</p>
+        <p>「この日がいい」と候補日を先に決める方式ではなく、空き時間を集めてから決める方式です。</p>
       </div>
     </section>
 
@@ -49,7 +48,7 @@
         <span class="step">1</span>
         <div>
           <h2>自分の名前を選ぶ</h2>
-          <p>スマホでもPCでも、一覧から自分の名前を選べば同じ回答者として使えます。</p>
+          <p>スマホでもPCでも、同じ名前を選べば同じ人として空き時間を追加・編集できます。</p>
         </div>
       </div>
       <form id="memberForm" class="form-grid">
@@ -59,152 +58,117 @@
         <label>役割・メモ 任意
           <input name="role_memo" placeholder="例：収益モデル担当" />
         </label>
-        <div class="hint-box full">既に名前がある場合は、下の一覧から選ぶだけで投票できます。名前がない場合だけ追加してください。</div>
-        <button type="submit" class="primary full">新しい回答者を追加する / メモ更新</button>
+        <button type="submit" class="primary full">新しい回答者を追加 / メモ更新</button>
       </form>
       <div id="currentMemberBox" class="small-box is-hidden"></div>
       <h3 class="mini-heading">回答者一覧</h3>
       <div id="memberList" class="member-list"></div>
     </section>
 
-    <section id="bestSection" class="card is-hidden">
+    <section id="availabilitySection" class="card is-hidden">
       <div class="section-title">
         <span class="step">2</span>
         <div>
-          <h2>今いちばん集まりやすい候補</h2>
-          <p>○と△の合計が多く、×が少ない日程を上に出します。</p>
-        </div>
-      </div>
-      <div id="bestBox" class="empty">まだ候補日時がありません。</div>
-    </section>
-
-    <section id="confirmedSection" class="card is-hidden">
-      <div class="section-title">
-        <span class="step">3</span>
-        <div>
-          <h2>確定した作業予定</h2>
-          <p>確定した日程の場所・作業内容・参加者を表示します。確定済みの日程は「確定を外す」で戻せます。</p>
-        </div>
-      </div>
-      <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
-    </section>
-
-    <section id="slotSection" class="card is-hidden">
-      <div class="section-title">
-        <span class="step">4</span>
-        <div>
-          <h2>候補日を追加</h2>
-          <p>日付、30分刻みの開始/終了時間、作業内容、場所だけで追加できます。日付は固定ではなく毎回選択します。</p>
+          <h2>空いている時間を入力</h2>
+          <p>候補日を考えず、自分が空いている時間を何個でも入れてください。時間は30分刻みです。</p>
         </div>
       </div>
 
-      <form id="slotForm" class="slot-form">
+      <form id="availabilityForm" class="slot-form">
         <label class="full">日付
-          <input id="slotDate" name="date" type="date" required />
+          <input id="availableDate" name="date" type="date" required />
         </label>
-
         <div class="form-grid full no-gap-top">
           <label>開始時間
-            <select id="slotStart" name="start_time" required></select>
+            <select id="availableStart" name="start_time" required></select>
           </label>
           <label>終了時間
-            <select id="slotEnd" name="end_time" required></select>
+            <select id="availableEnd" name="end_time" required></select>
           </label>
         </div>
-
-        <div class="quick-section full">
-          <div class="quick-head">
-            <h3>作業内容 複数選択可</h3>
-            <span id="selectedTaskText" class="selected-text">未選択</span>
-          </div>
-          <div class="quick-grid task-grid" id="taskPresetList">
-            <button type="button" class="chip multi" data-task="ターゲット整理">ターゲット整理</button>
-            <button type="button" class="chip multi" data-task="競合調査">競合調査</button>
-            <button type="button" class="chip multi" data-task="収益モデル整理">収益モデル整理</button>
-            <button type="button" class="chip multi" data-task="企画書作成">企画書作成</button>
-            <button type="button" class="chip multi" data-task="応募フォーム作成">応募フォーム作成</button>
-            <button type="button" class="chip multi" data-task="スライド作成">スライド作成</button>
-            <button type="button" class="chip multi" data-task="発表練習">発表練習</button>
-            <button type="button" class="chip multi" data-task="その他">その他</button>
-          </div>
-          <label class="mini-label">作業内容メモ 任意
-            <input id="taskExtra" name="task_extra" placeholder="例：初期ターゲットと収益モデルを中心にやる" />
-          </label>
-        </div>
-
         <div class="quick-section full">
           <div class="quick-head">
             <h3>場所</h3>
             <span id="selectedLocationText" class="selected-text">未選択</span>
           </div>
-          <div class="quick-grid two-grid" id="locationPresetList">
+          <div class="quick-grid three-grid" id="locationPresetList">
             <button type="button" class="chip location-chip" data-location="オンライン">オンライン</button>
             <button type="button" class="chip location-chip" data-location="大学">大学</button>
+            <button type="button" class="chip location-chip" data-location="どちらでも">どちらでも</button>
           </div>
-          <input id="slotLocation" name="location" type="hidden" required />
+          <input id="availableLocation" name="location" type="hidden" required />
         </div>
-
-        <label class="full">候補日に対するメモ 任意
-          <textarea id="slotMemo" name="memo" rows="3" placeholder="例：この日は企画概要を固めたい。遅れて参加でもOK。"></textarea>
+        <label class="full">メモ 任意
+          <textarea id="availableMemo" name="memo" rows="3" placeholder="例：19時以降なら安定。途中参加になるかも。"></textarea>
         </label>
-
-        <button type="submit" class="primary full big-button">候補日時を追加</button>
+        <div class="button-row full">
+          <button id="availabilitySubmit" type="submit" class="primary big-button">空き時間を追加</button>
+          <button id="cancelEditAvailability" type="button" class="secondary is-hidden">編集をやめる</button>
+        </div>
       </form>
     </section>
 
-    <section id="candidateSection" class="card is-hidden">
+    <section id="suggestionSection" class="card is-hidden">
+      <div class="section-title">
+        <span class="step">3</span>
+        <div>
+          <h2>集まりやすい日時の提案</h2>
+          <p>入力された空き時間から、○△×ではなく実際に重なっている時間を計算します。</p>
+        </div>
+      </div>
+      <div class="control-line">
+        <label>必要な作業時間
+          <select id="minDurationSelect">
+            <option value="60">1時間以上</option>
+            <option value="90" selected>1時間30分以上</option>
+            <option value="120">2時間以上</option>
+            <option value="180">3時間以上</option>
+          </select>
+        </label>
+        <span class="muted">人数が多い順、×になる人が少ない順で表示します。</span>
+      </div>
+      <div id="suggestionList" class="candidate-list"></div>
+    </section>
+
+    <section id="confirmedSection" class="card is-hidden">
+      <div class="section-title">
+        <span class="step">4</span>
+        <div>
+          <h2>確定した作業予定</h2>
+          <p>提案された日時から確定したものを表示します。間違えたら確定を外せます。</p>
+        </div>
+      </div>
+      <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
+    </section>
+
+    <section id="availabilityListSection" class="card is-hidden">
       <div class="section-title">
         <span class="step">5</span>
         <div>
-          <h2>候補日ごとの投票</h2>
-          <p>各候補日に対して、○ / △ / × を押すだけで回答できます。候補日の時間・場所・内容もあとから編集できます。</p>
+          <h2>みんなの空き時間</h2>
+          <p>誰がいつ空いているかを一覧で確認できます。自分の空き時間は編集・削除できます。</p>
         </div>
       </div>
-      <div id="candidateList" class="candidate-list"></div>
+      <div id="availabilityList" class="availability-list"></div>
     </section>
 
-    <section id="tableSection" class="card is-hidden">
+    <section id="matrixSection" class="card is-hidden">
       <div class="section-title">
         <span class="step">6</span>
         <div>
-          <h2>全体の回答表</h2>
-          <p>誰がどの日程に回答したか、未回答者が誰かを表で確認できます。</p>
+          <h2>日付ごとの入力状況</h2>
+          <p>誰がどの日に空き時間を入れているかを確認できます。</p>
         </div>
       </div>
       <div class="table-wrap">
-        <table id="summaryTable"></table>
+        <table id="availabilityMatrix"></table>
       </div>
-    </section>
-
-    <section id="notesSection" class="card is-hidden">
-      <div class="section-title">
-        <span class="step">7</span>
-        <div>
-          <h2>ビジコン進行管理メモ</h2>
-          <p>確定した作業日のToDo・決定事項・宿題を記録します。</p>
-        </div>
-      </div>
-      <form id="notesForm" class="form-grid">
-        <label class="full">今日やること
-          <textarea name="todo" rows="5" placeholder="・ターゲットを確定する&#10;・競合との差別化を考える"></textarea>
-        </label>
-        <label class="full">決定事項
-          <textarea name="decisions" rows="5" placeholder="・初期ターゲットは大学生&#10;・実証場所は大学周辺"></textarea>
-        </label>
-        <label class="full">次回までの宿題
-          <textarea name="homework" rows="5" placeholder="・田丸：収益モデルを文章化&#10;・佐藤：競合調査"></textarea>
-        </label>
-        <label class="full">担当者メモ
-          <textarea name="memo" rows="4"></textarea>
-        </label>
-        <button type="submit" class="primary full">メモを保存</button>
-      </form>
     </section>
   </main>
 
   <footer class="footer">GitHub Pages + Supabase / 固定チーム専用</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15"></script>
+  <script src="./app.js?v=11"></script>
 </body>
 </html>
