@@ -1,5 +1,5 @@
 // ============================================================
-// SAMPO QUEST fixed-team scheduler v5
+// SAMPO QUEST fixed-team scheduler v7
 // GitHub Pages用。secret key / service_role key は絶対に入れないでください。
 // ============================================================
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
@@ -15,6 +15,7 @@ const DEFAULT_GROUP = {
 };
 
 const AUTO_REFRESH_MS = 30000;
+const ACTIVE_MEMBER_KEY = `active-member:${DEFAULT_GROUP_KEY}`;
 const DEVICE_TOKEN_KEY = `device-token:${DEFAULT_GROUP_KEY}`;
 const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -125,13 +126,11 @@ function getDeviceToken() {
 }
 
 function canDeleteCurrentMember() {
-  if (!state.currentMember) return false;
-  return !state.currentMember.owner_token || state.currentMember.owner_token === state.deviceToken;
+  return Boolean(state.currentMember);
 }
 
 function canDeleteSlot(slot) {
   if (!state.currentMember || !slot) return false;
-  if (slot.created_by_token) return slot.created_by_token === state.deviceToken;
   if (slot.created_by_member_id) return slot.created_by_member_id === state.currentMember.id;
   return true; // 旧版で作った候補は作成者不明のため、チーム内で削除可能にする
 }
@@ -276,7 +275,7 @@ async function loadAll() {
   state.responses = responses.data || [];
   state.notes = notes.data || [];
 
-  const savedMemberId = localStorage.getItem(`member:${DEFAULT_GROUP_KEY}`);
+  const savedMemberId = localStorage.getItem(ACTIVE_MEMBER_KEY) || localStorage.getItem(`member:${DEFAULT_GROUP_KEY}`);
   state.currentMember = state.members.find((member) => member.id === savedMemberId) || null;
 }
 
@@ -299,24 +298,45 @@ function render() {
 
 function renderMembers() {
   const currentBox = $('currentMemberBox');
+  currentBox.classList.remove('is-hidden');
+
   if (state.currentMember) {
-    currentBox.classList.remove('is-hidden');
     currentBox.innerHTML = `
-      <div>現在の回答者：<b>${esc(state.currentMember.name)}</b>${state.currentMember.role_memo ? ` / ${esc(state.currentMember.role_memo)}` : ''}</div>
+      <div>現在は <b>${esc(state.currentMember.name)}</b> として操作中${state.currentMember.role_memo ? ` / ${esc(state.currentMember.role_memo)}` : ''}</div>
       <div class="current-actions">
-        <button id="deleteCurrentMemberButton" type="button" class="danger small-danger" ${canDeleteCurrentMember() ? '' : 'disabled'}>自分の回答者データを削除</button>
+        <button id="deleteCurrentMemberButton" type="button" class="danger small-danger">この回答者データを削除</button>
       </div>
-      ${canDeleteCurrentMember() ? '<p class="hint">自分の回答者データと、この名前で入れた○△×回答が消えます。</p>' : '<p class="hint">この端末で作成した回答者ではないため削除できません。</p>'}
+      <p class="hint">スマホでもPCでも、下の一覧から自分の名前を選べば同じ回答者として投票できます。ログインなしなので、チーム内の誰でも名前を選べる前提です。</p>
     `;
     $('deleteCurrentMemberButton')?.addEventListener('click', deleteCurrentMember);
   } else {
-    currentBox.classList.remove('is-hidden');
-    currentBox.innerHTML = 'まだ回答者が選ばれていません。先に自分の名前を入力してください。';
+    currentBox.innerHTML = 'まだ回答者が選ばれていません。既存の名前を選ぶか、新しく名前を追加してください。';
   }
 
   $('memberList').innerHTML = state.members.length
-    ? state.members.map((member) => `<span class="pill">${esc(member.name)}${member.role_memo ? `：${esc(member.role_memo)}` : ''}</span>`).join('')
+    ? state.members.map((member) => `
+        <button type="button" class="member-select ${state.currentMember?.id === member.id ? 'is-current' : ''}" data-member="${member.id}">
+          <span>${esc(member.name)}</span>
+          ${member.role_memo ? `<small>${esc(member.role_memo)}</small>` : ''}
+          ${state.currentMember?.id === member.id ? '<b>選択中</b>' : '<b>この人として使う</b>'}
+        </button>
+      `).join('')
     : '<div class="empty">まだメンバーがいません。</div>';
+
+  document.querySelectorAll('.member-select').forEach((button) => {
+    button.addEventListener('click', selectMember);
+  });
+}
+
+function selectMember(event) {
+  const memberId = event.currentTarget.dataset.member;
+  const member = state.members.find((item) => item.id === memberId);
+  if (!member) return showToast('メンバーが見つかりません', 'error');
+  localStorage.setItem(ACTIVE_MEMBER_KEY, member.id);
+  localStorage.setItem(`member:${DEFAULT_GROUP_KEY}`, member.id);
+  state.currentMember = member;
+  render();
+  showToast(`${member.name} として操作します`);
 }
 
 async function joinMember(event) {
@@ -344,6 +364,7 @@ async function joinMember(event) {
         return fail('メンバー情報の更新に失敗しました', updated.error);
       }
     }
+    localStorage.setItem(ACTIVE_MEMBER_KEY, existing.id);
     localStorage.setItem(`member:${DEFAULT_GROUP_KEY}`, existing.id);
     await loadAllAndRender(false);
     setLoading(false);
@@ -362,6 +383,7 @@ async function joinMember(event) {
     return fail('メンバー登録に失敗しました', error);
   }
 
+  localStorage.setItem(ACTIVE_MEMBER_KEY, data.id);
   localStorage.setItem(`member:${DEFAULT_GROUP_KEY}`, data.id);
   event.currentTarget.reset();
   await loadAllAndRender(false);
@@ -372,7 +394,7 @@ async function joinMember(event) {
 async function addSlot(event) {
   event.preventDefault();
 
-  if (!state.currentMember) return showToast('先に自分の名前を入力して参加してください', 'error');
+  if (!state.currentMember) return showToast('先に自分の名前を選んでください', 'error');
 
   const form = new FormData(event.currentTarget);
   const date = form.get('date');
@@ -587,7 +609,7 @@ function renderCandidates() {
 }
 
 async function autoSaveStatus(event) {
-  if (!state.currentMember) return showToast('先にメンバーとして参加してください', 'error');
+  if (!state.currentMember) return showToast('先に自分の名前を選んでください', 'error');
 
   const button = event.currentTarget;
   const slotId = button.closest('.mark-buttons').dataset.slot;
@@ -598,7 +620,7 @@ async function autoSaveStatus(event) {
 }
 
 async function saveComment(event) {
-  if (!state.currentMember) return showToast('先にメンバーとして参加してください', 'error');
+  if (!state.currentMember) return showToast('先に自分の名前を選んでください', 'error');
 
   const slotId = event.currentTarget.dataset.slot;
   const existing = memberResponse(state.currentMember.id, slotId);
@@ -635,7 +657,7 @@ async function upsertResponse(slotId, status, comment, successMessage) {
 }
 
 async function deleteSlot(event) {
-  if (!state.currentMember) return showToast('先にメンバーとして参加してください', 'error');
+  if (!state.currentMember) return showToast('先に自分の名前を選んでください', 'error');
 
   const slotId = event.currentTarget.dataset.slot;
   const slot = state.slots.find((item) => item.id === slotId);
@@ -646,10 +668,9 @@ async function deleteSlot(event) {
   if (!ok) return;
 
   setLoading(true);
-  const { data, error } = await sb.rpc('delete_time_slot_if_owner', {
+  const { data, error } = await sb.rpc('delete_time_slot_by_selection', {
     p_time_slot_id: slotId,
     p_member_id: state.currentMember.id,
-    p_owner_token: state.deviceToken,
   });
 
   if (error) {
@@ -665,16 +686,14 @@ async function deleteSlot(event) {
 
 async function deleteCurrentMember() {
   if (!state.currentMember) return showToast('削除する回答者が選ばれていません', 'error');
-  if (!canDeleteCurrentMember()) return showToast('この端末で作成した回答者だけ削除できます', 'error');
 
   const ok = window.confirm(`${state.currentMember.name} の回答者データを削除しますか？\nこの人の○△×回答もすべて消えます。`);
   if (!ok) return;
 
   setLoading(true);
   const memberId = state.currentMember.id;
-  const { data, error } = await sb.rpc('delete_member_if_owner', {
+  const { data, error } = await sb.rpc('delete_member_by_selection', {
     p_member_id: memberId,
-    p_owner_token: state.deviceToken,
   });
 
   if (error) {
@@ -683,6 +702,7 @@ async function deleteCurrentMember() {
   }
 
   if (Number(data || 0) > 0) {
+    localStorage.removeItem(ACTIVE_MEMBER_KEY);
     localStorage.removeItem(`member:${DEFAULT_GROUP_KEY}`);
     state.currentMember = null;
     await loadAllAndRender(false);
@@ -690,7 +710,7 @@ async function deleteCurrentMember() {
     showToast('回答者データを削除しました');
   } else {
     setLoading(false);
-    showToast('削除できませんでした。この端末で作成した回答者か確認してください', 'error');
+    showToast('削除できませんでした。ページを更新して確認してください', 'error');
   }
 }
 

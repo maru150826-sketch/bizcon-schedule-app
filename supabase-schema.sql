@@ -1,5 +1,5 @@
--- SAMPO QUEST fixed-team scheduler schema v5
--- 回答者削除・候補日削除対応版。
+-- SAMPO QUEST fixed-team scheduler schema v7
+-- 回答者選択式・スマホ/PC共通操作・削除対応版。
 -- 既存プロジェクトに対しても再実行しやすいようにしています。
 
 create extension if not exists "pgcrypto";
@@ -195,3 +195,53 @@ $$;
 
 grant execute on function public.delete_member_if_owner(uuid, text) to anon;
 grant execute on function public.delete_time_slot_if_owner(uuid, uuid, text) to anon;
+
+
+-- v7: ログインなしで「選択中の回答者」として削除できる簡易RPC
+-- 4人程度のチーム内利用を想定。厳密な本人確認はしません。
+
+create or replace function public.delete_member_by_selection(
+  p_member_id uuid
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer := 0;
+begin
+  delete from public.members
+  where id = p_member_id;
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+create or replace function public.delete_time_slot_by_selection(
+  p_time_slot_id uuid,
+  p_member_id uuid
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer := 0;
+begin
+  delete from public.time_slots
+  where id = p_time_slot_id
+    and (
+      created_by_member_id = p_member_id
+      or created_by_member_id is null
+    );
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+grant execute on function public.delete_member_by_selection(uuid) to anon;
+grant execute on function public.delete_time_slot_by_selection(uuid, uuid) to anon;
