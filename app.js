@@ -663,7 +663,7 @@ async function unconfirmSlot(id) {
 }
 
 function render() {
-  ['groupSection','weekSection','confirmedSection','memberSection','availabilitySection','suggestionSection','dateLocationSection','availabilityListSection','matrixSection']
+  ['groupSection','weekSection','confirmedSection','memberSection','availabilitySection','suggestionSection','availabilityListSection','matrixSection']
     .forEach((id) => $(id).classList.remove('is-hidden'));
   renderGroup();
   renderWeekControl();
@@ -672,7 +672,6 @@ function render() {
   renderCurrentMember();
   renderLocationChips();
   renderSuggestions();
-  renderDateLocationSummary();
   renderAvailabilityList();
   renderMatrix();
 }
@@ -749,17 +748,12 @@ function renderSuggestions() {
     const allWithPartial = totalPossible === state.members.length && s.partialIds.length > 0;
     const enough = totalPossible >= Math.max(2, Math.ceil(state.members.length * 0.75));
     const label = allFull ? '全員フル参加' : allWithPartial ? '全員OK（一部参加あり）' : enough ? 'かなり有力' : '一部参加';
-    const advice = getLocationAdvice(s.date, minutes(s.start_time), minutes(s.end_time));
-    const best = advice[0];
-    const locationNote = locationOptionsText(s.locationOptions);
     return `
       <article class="candidate-card">
         <div class="card-top">
           <div>
             <h3 class="date-title">${formatDate(s.date)} ${s.start_time}〜${s.end_time}</h3>
-            <div class="meta-line">おすすめ場所：${escapeHtml(s.location)} / ${s.duration}分</div>
-            ${locationNote ? `<div class="meta-line">場所比較：${escapeHtml(locationNote)}</div>` : ''}
-            ${best ? `<div class="meta-line">この時間の場所判断：${escapeHtml(best.location)}が強め（フル${best.fullIds.length}・一部${best.partialIds.length}）</div>` : ''}
+            <div class="meta-line">場所：${escapeHtml(s.location)} / ${s.duration}分</div>
           </div>
           <div class="badge-row">
             <span class="badge ${allFull ? 'good' : enough ? 'maybe' : ''}">${label}</span>
@@ -807,53 +801,43 @@ function renderConfirmed() {
   `).join('');
 }
 
-function renderDateLocationSummary() {
-  const box = $('dateLocationList');
-  const weekAvailability = selectedWeekAvailability();
-  if (!weekAvailability.length) {
-    box.innerHTML = `<div class="empty">${formatWeekRange()} の場所判断はまだ出せません。</div>`;
-    return;
-  }
-  const dates = [...new Set(weekAvailability.map((a) => a.date))].sort();
-  box.innerHTML = dates.map((date) => {
-    const daySlots = weekAvailability.filter((a) => a.date === date);
-    const onlinePeople = peopleWhoCanUseLocation(daySlots, 'オンライン');
-    const universityPeople = peopleWhoCanUseLocation(daySlots, '大学');
-    const best = onlinePeople.length === universityPeople.length
-      ? 'どちらでも'
-      : onlinePeople.length > universityPeople.length ? 'オンライン' : '大学';
-    return `
-      <article class="summary-card">
-        <div class="card-top">
-          <div>
-            <h3 class="date-title">${formatDate(date)}</h3>
-            <div class="meta-line">おすすめ場所：${best}</div>
-          </div>
-          <span class="badge maybe">${daySlots.length}件入力</span>
-        </div>
-        <div class="people-box compact-people">
-          <div><b>オンラインで動ける人：</b>${onlinePeople.map(memberName).join('、') || 'なし'}</div>
-          <div><b>大学で動ける人：</b>${universityPeople.map(memberName).join('、') || 'なし'}</div>
-        </div>
-      </article>
-    `;
-  }).join('');
-}
-
 function peopleWhoCanUseLocation(slots, location) {
   return [...new Set(slots
     .filter((slot) => locationMatches(slot.location, location))
     .map((slot) => slot.member_id))];
 }
 
-function groupAvailabilityByDateTime(items) {
+function groupAvailabilityByDate(items) {
   const map = new Map();
   for (const item of items) {
-    const key = `${item.date}-${String(item.start_time).slice(0,5)}-${String(item.end_time).slice(0,5)}`;
-    if (!map.has(key)) map.set(key, { date: item.date, start_time: String(item.start_time).slice(0,5), end_time: String(item.end_time).slice(0,5), slots: [] });
-    map.get(key).slots.push(item);
+    if (!map.has(item.date)) map.set(item.date, []);
+    map.get(item.date).push(item);
   }
-  return [...map.values()].sort(sortByDateTime);
+  return [...map.entries()]
+    .map(([date, slots]) => ({ date, slots: mergeDuplicateAvailability(slots).sort(sortByDateTime) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function mergeDuplicateAvailability(items) {
+  const map = new Map();
+  for (const item of items) {
+    const key = `${item.member_id}-${item.date}-${String(item.start_time).slice(0,5)}-${String(item.end_time).slice(0,5)}-${normalizeLocation(item.location)}`;
+    if (!map.has(key)) {
+      map.set(key, { ...item, mergedIds: [item.id], mergedMemos: item.memo ? [item.memo] : [] });
+      continue;
+    }
+    const existing = map.get(key);
+    existing.mergedIds.push(item.id);
+    if (item.memo) existing.mergedMemos.push(item.memo);
+  }
+  return [...map.values()];
+}
+
+function slotLine(item, { includeLocation = true, includeMemo = true } = {}) {
+  const time = `${String(item.start_time).slice(0,5)}〜${String(item.end_time).slice(0,5)}`;
+  const location = includeLocation ? `（${normalizeLocation(item.location)}）` : '';
+  const memo = includeMemo && item.mergedMemos?.length ? `：${item.mergedMemos.map(escapeHtml).join(' / ')}` : '';
+  return `<b>${escapeHtml(memberName(item.member_id))}</b> ${time}${escapeHtml(location)}${memo}`;
 }
 
 function renderAvailabilityList() {
@@ -863,31 +847,26 @@ function renderAvailabilityList() {
     box.innerHTML = `<div class="empty">${formatWeekRange()} にはまだ空き時間が入力されていません。</div>`;
     return;
   }
-  const groups = groupAvailabilityByDateTime(weekAvailability);
+
+  const groups = groupAvailabilityByDate(weekAvailability);
   box.innerHTML = groups.map((group) => {
-    const onlinePeople = peopleWhoCanUseLocation(group.slots, 'オンライン');
-    const universityPeople = peopleWhoCanUseLocation(group.slots, '大学');
     const mine = group.slots.filter((a) => a.member_id === state.currentMemberId);
-    const locationText = `オンラインOK ${onlinePeople.length}人 / 大学OK ${universityPeople.length}人`;
     return `
-      <article class="availability-card grouped-card">
+      <article class="availability-card grouped-card day-availability-card">
         <div class="card-top">
           <div>
-            <h3 class="date-title">${formatDate(group.date)} ${group.start_time}〜${group.end_time}</h3>
-            <div class="meta-line">${escapeHtml(locationText)}</div>
-            <div class="meta-line">入力者：${group.slots.map((a) => escapeHtml(memberName(a.member_id))).join('、')}</div>
+            <h3 class="date-title">${formatDate(group.date)}</h3>
+            <div class="meta-line">${group.slots.length}件の空き時間</div>
           </div>
-          <span class="badge good">${group.slots.length}件</span>
+          <span class="badge good">${new Set(group.slots.map((a) => a.member_id)).size}/${state.members.length}人入力</span>
         </div>
-        <div class="people-box compact-people">
-          <div><b>オンライン：</b>${onlinePeople.map(memberName).join('、') || 'なし'}</div>
-          <div><b>大学：</b>${universityPeople.map(memberName).join('、') || 'なし'}</div>
-          ${group.slots.some((a) => a.memo) ? `<div><b>メモ：</b>${group.slots.filter((a) => a.memo).map((a) => `${escapeHtml(memberName(a.member_id))}: ${escapeHtml(a.memo)}`).join('<br>')}</div>` : ''}
+        <div class="daily-lines">
+          ${group.slots.map((a) => `<div class="daily-line">${slotLine(a)}</div>`).join('')}
         </div>
         ${mine.length ? `
           <div class="action-row">
             ${mine.map((a) => `
-              <button type="button" class="secondary" onclick="editAvailability('${a.id}')">${escapeHtml(memberName(a.member_id))}の入力を編集</button>
+              <button type="button" class="secondary" onclick="editAvailability('${a.id}')">${escapeHtml(memberName(a.member_id))} ${String(a.start_time).slice(0,5)}〜${String(a.end_time).slice(0,5)}を編集</button>
               <button type="button" class="danger" onclick="deleteAvailability('${a.id}')">削除</button>
             `).join('')}
           </div>
@@ -904,21 +883,17 @@ function renderMatrix() {
     table.innerHTML = '<tr><td class="empty">この週の日付ごとの入力状況はまだありません。</td></tr>';
     return;
   }
-  const dates = [...new Set(weekAvailability.map((a) => a.date))].sort();
-  const head = `<tr><th>日付</th><th>場所判断</th>${state.members.map((m) => `<th>${escapeHtml(m.name)}</th>`).join('')}</tr>`;
-  const rows = dates.map((date) => {
-    const daySlots = weekAvailability.filter((a) => a.date === date);
-    const onlinePeople = peopleWhoCanUseLocation(daySlots, 'オンライン');
-    const universityPeople = peopleWhoCanUseLocation(daySlots, '大学');
-    const place = onlinePeople.length === universityPeople.length ? 'どちらでも' : onlinePeople.length > universityPeople.length ? 'オンライン' : '大学';
+  const groups = groupAvailabilityByDate(weekAvailability);
+  const head = `<tr><th>日付</th>${state.members.map((m) => `<th>${escapeHtml(m.name)}</th>`).join('')}</tr>`;
+  const rows = groups.map((group) => {
     const cells = state.members.map((m) => {
-      const slots = daySlots
+      const slots = group.slots
         .filter((a) => a.member_id === m.id)
         .sort(sortByDateTime)
-        .map((a) => `${String(a.start_time).slice(0,5)}〜${String(a.end_time).slice(0,5)} ${normalizeLocation(a.location)}`);
+        .map((a) => `${String(a.start_time).slice(0,5)}〜${String(a.end_time).slice(0,5)}（${normalizeLocation(a.location)}）${a.mergedMemos?.length ? `：${a.mergedMemos.join(' / ')}` : ''}`);
       return `<td>${slots.length ? slots.map(escapeHtml).join('<br>') : '<span class="muted">未入力</span>'}</td>`;
     }).join('');
-    return `<tr><td><b>${formatDate(date)}</b></td><td>${place}<br><span class="muted">オンライン${onlinePeople.length}/大学${universityPeople.length}</span></td>${cells}</tr>`;
+    return `<tr><td><b>${formatDate(group.date)}</b></td>${cells}</tr>`;
   }).join('');
   table.innerHTML = head + rows;
 }

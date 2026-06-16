@@ -176,3 +176,21 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
   .week-main { grid-column: 1 / -1; order: -1; }
   .week-control .ghost { grid-column: 1 / -1; }
 }
+
+.daily-lines {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.daily-line {
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.8);
+  line-height: 1.55;
+}
+
+.day-availability-card .action-row {
+  margin-top: 12px;
+}
