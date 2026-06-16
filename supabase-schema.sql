@@ -1,6 +1,6 @@
--- SAMPO QUEST fixed-team scheduler schema
+-- SAMPO QUEST fixed-team scheduler schema v5
+-- 回答者削除・候補日削除対応版。
 -- 既存プロジェクトに対しても再実行しやすいようにしています。
--- groups に app_key を追加し、URLやグループコードなしで固定チームを読み込めるようにします。
 
 create extension if not exists "pgcrypto";
 
@@ -22,9 +22,12 @@ create table if not exists public.members (
   group_id uuid references public.groups(id) on delete cascade,
   name text not null,
   role_memo text,
+  owner_token text,
   created_at timestamp with time zone default now(),
   unique(group_id, name)
 );
+
+alter table public.members add column if not exists owner_token text;
 
 create table if not exists public.time_slots (
   id uuid primary key default gen_random_uuid(),
@@ -36,8 +39,28 @@ create table if not exists public.time_slots (
   location text,
   memo text,
   is_confirmed boolean default false,
+  created_by_member_id uuid,
+  created_by_token text,
   created_at timestamp with time zone default now()
 );
+
+alter table public.time_slots add column if not exists created_by_member_id uuid;
+alter table public.time_slots add column if not exists created_by_token text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'time_slots_created_by_member_id_fkey'
+  ) then
+    alter table public.time_slots
+      add constraint time_slots_created_by_member_id_fkey
+      foreign key (created_by_member_id)
+      references public.members(id)
+      on delete set null;
+  end if;
+end $$;
 
 create table if not exists public.responses (
   id uuid primary key default gen_random_uuid(),
@@ -91,7 +114,7 @@ drop policy if exists "Allow anon insert meeting_notes" on public.meeting_notes;
 drop policy if exists "Allow anon update meeting_notes" on public.meeting_notes;
 
 -- 最初は、同じURLを知っているメンバー全員が読み書きできる設計です。
--- 管理者認証は後から追加できます。
+-- 削除は通常のDELETEポリシーではなく、下のRPC関数で「この端末で作ったデータか」を確認して実行します。
 
 create policy "Allow anon select groups" on public.groups for select to anon using (true);
 create policy "Allow anon insert groups" on public.groups for insert to anon with check (true);
@@ -112,3 +135,63 @@ create policy "Allow anon update responses" on public.responses for update to an
 create policy "Allow anon select meeting_notes" on public.meeting_notes for select to anon using (true);
 create policy "Allow anon insert meeting_notes" on public.meeting_notes for insert to anon with check (true);
 create policy "Allow anon update meeting_notes" on public.meeting_notes for update to anon using (true) with check (true);
+
+-- 自分の回答者データ削除用RPC
+-- member削除時、responsesは外部キー on delete cascade により自動で削除されます。
+
+create or replace function public.delete_member_if_owner(
+  p_member_id uuid,
+  p_owner_token text
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer := 0;
+begin
+  delete from public.members
+  where id = p_member_id
+    and (
+      owner_token = p_owner_token
+      or owner_token is null
+    );
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+-- 自分が追加した候補日削除用RPC
+-- time_slot削除時、responsesとmeeting_notesは外部キー on delete cascade により自動で削除されます。
+-- 旧版で作られた候補日は作成者情報がないため、チーム内で削除可能にしています。
+
+create or replace function public.delete_time_slot_if_owner(
+  p_time_slot_id uuid,
+  p_member_id uuid,
+  p_owner_token text
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer := 0;
+begin
+  delete from public.time_slots
+  where id = p_time_slot_id
+    and (
+      created_by_token = p_owner_token
+      or created_by_member_id = p_member_id
+      or (created_by_token is null and created_by_member_id is null)
+    );
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+grant execute on function public.delete_member_if_owner(uuid, text) to anon;
+grant execute on function public.delete_time_slot_if_owner(uuid, uuid, text) to anon;

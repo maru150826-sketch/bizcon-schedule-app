@@ -18,6 +18,8 @@ GitHub Pages + Supabaseで動く、固定チーム専用の予定調整Webアプ
 - 候補から確定日時を登録
 - 確定日時に対して、今日やること・決定事項・宿題・担当者メモを保存
 - 30秒ごとに自動更新
+- 自分の回答者データを削除
+- 自分が追加した候補日を削除
 
 ## ファイル構成
 
@@ -82,7 +84,16 @@ const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
 - responses: select / insert / update
 - meeting_notes: select / insert / update
 
-削除は許可していません。
+通常のDELETEポリシーは使っていません。代わりにRPC関数で、ブラウザ内に保存した端末トークンを使い「この端末で作った回答者・候補日か」を確認してから削除します。
+
+追加されるRPC関数：
+
+```txt
+delete_member_if_owner
+delete_time_slot_if_owner
+```
+
+ログインなしの簡易方式なので、厳密な本人認証ではありません。チーム内だけで使う最小構成です。
 
 ## 使い方
 
@@ -91,5 +102,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
 3. 候補日を追加する場合は、日付・時間・作業内容・場所を選んで追加
 4. 各候補日に対して○ / △ / × を押す
 5. 他の人の回答状況と未回答者を見る
-6. ○+△が多く、×が少ない候補を確定する
-7. 確定後、作業メモを記録する
+6. 自分が追加した候補日は「この候補日を削除」から削除する
+7. 自分の回答者データは「自分の回答者データを削除」から削除する
+8. ○+△が多く、×が少ない候補を確定する
+9. 確定後、作業メモを記録する

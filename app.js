@@ -1,5 +1,5 @@
 // ============================================================
-// SAMPO QUEST fixed-team scheduler v4
+// SAMPO QUEST fixed-team scheduler v5
 // GitHub Pages用。secret key / service_role key は絶対に入れないでください。
 // ============================================================
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
@@ -15,6 +15,7 @@ const DEFAULT_GROUP = {
 };
 
 const AUTO_REFRESH_MS = 30000;
+const DEVICE_TOKEN_KEY = `device-token:${DEFAULT_GROUP_KEY}`;
 const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
@@ -26,6 +27,7 @@ const state = {
   responses: [],
   notes: [],
   selectedTasks: [],
+  deviceToken: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -113,6 +115,34 @@ function statusClass(status) {
   return status ? `status-${status}` : 'status-none';
 }
 
+function getDeviceToken() {
+  let token = localStorage.getItem(DEVICE_TOKEN_KEY);
+  if (!token) {
+    token = crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem(DEVICE_TOKEN_KEY, token);
+  }
+  return token;
+}
+
+function canDeleteCurrentMember() {
+  if (!state.currentMember) return false;
+  return !state.currentMember.owner_token || state.currentMember.owner_token === state.deviceToken;
+}
+
+function canDeleteSlot(slot) {
+  if (!state.currentMember || !slot) return false;
+  if (slot.created_by_token) return slot.created_by_token === state.deviceToken;
+  if (slot.created_by_member_id) return slot.created_by_member_id === state.currentMember.id;
+  return true; // 旧版で作った候補は作成者不明のため、チーム内で削除可能にする
+}
+
+function slotCreatorName(slot) {
+  const creator = state.members.find((member) => member.id === slot.created_by_member_id);
+  if (creator) return creator.name;
+  if (!slot.created_by_member_id && !slot.created_by_token) return '不明（旧データ）';
+  return '不明';
+}
+
 function setToday() {
   const dateInput = $('slotDate');
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
@@ -143,6 +173,7 @@ async function init() {
     return;
   }
 
+  state.deviceToken = getDeviceToken();
   bindEvents();
   buildTimeOptions();
   setToday();
@@ -270,7 +301,14 @@ function renderMembers() {
   const currentBox = $('currentMemberBox');
   if (state.currentMember) {
     currentBox.classList.remove('is-hidden');
-    currentBox.innerHTML = `現在の回答者：<b>${esc(state.currentMember.name)}</b>${state.currentMember.role_memo ? ` / ${esc(state.currentMember.role_memo)}` : ''}`;
+    currentBox.innerHTML = `
+      <div>現在の回答者：<b>${esc(state.currentMember.name)}</b>${state.currentMember.role_memo ? ` / ${esc(state.currentMember.role_memo)}` : ''}</div>
+      <div class="current-actions">
+        <button id="deleteCurrentMemberButton" type="button" class="danger small-danger" ${canDeleteCurrentMember() ? '' : 'disabled'}>自分の回答者データを削除</button>
+      </div>
+      ${canDeleteCurrentMember() ? '<p class="hint">自分の回答者データと、この名前で入れた○△×回答が消えます。</p>' : '<p class="hint">この端末で作成した回答者ではないため削除できません。</p>'}
+    `;
+    $('deleteCurrentMemberButton')?.addEventListener('click', deleteCurrentMember);
   } else {
     currentBox.classList.remove('is-hidden');
     currentBox.innerHTML = 'まだ回答者が選ばれていません。先に自分の名前を入力してください。';
@@ -296,8 +334,11 @@ async function joinMember(event) {
 
   const existing = state.members.find((member) => member.name === name);
   if (existing) {
-    if (role_memo && role_memo !== existing.role_memo) {
-      const updated = await sb.from('members').update({ role_memo }).eq('id', existing.id);
+    const patch = {};
+    if (role_memo && role_memo !== existing.role_memo) patch.role_memo = role_memo;
+    if (!existing.owner_token) patch.owner_token = state.deviceToken;
+    if (Object.keys(patch).length) {
+      const updated = await sb.from('members').update(patch).eq('id', existing.id);
       if (updated.error) {
         setLoading(false);
         return fail('メンバー情報の更新に失敗しました', updated.error);
@@ -312,7 +353,7 @@ async function joinMember(event) {
 
   const { data, error } = await sb
     .from('members')
-    .insert({ group_id: state.groupId, name, role_memo })
+    .insert({ group_id: state.groupId, name, role_memo, owner_token: state.deviceToken })
     .select()
     .single();
 
@@ -330,6 +371,8 @@ async function joinMember(event) {
 
 async function addSlot(event) {
   event.preventDefault();
+
+  if (!state.currentMember) return showToast('先に自分の名前を入力して参加してください', 'error');
 
   const form = new FormData(event.currentTarget);
   const date = form.get('date');
@@ -354,6 +397,8 @@ async function addSlot(event) {
     task_title: taskTitle,
     location,
     memo,
+    created_by_member_id: state.currentMember.id,
+    created_by_token: state.deviceToken,
   };
 
   setLoading(true);
@@ -494,7 +539,7 @@ function renderCandidates() {
       <div class="slot-top">
         <div>
           <div class="slot-time">${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</div>
-          <div class="slot-meta">作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}${slot.memo ? `<br>メモ：${esc(slot.memo)}` : ''}</div>
+          <div class="slot-meta">作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}<br>追加した人：${esc(slotCreatorName(slot))}${slot.memo ? `<br>メモ：${esc(slot.memo)}` : ''}</div>
         </div>
         <div class="judge">${judge(slot)}</div>
       </div>
@@ -528,13 +573,17 @@ function renderCandidates() {
         ${memberVotes}
       </div>
 
-      <button type="button" class="primary confirm-slot" data-slot="${slot.id}" style="margin-top:12px;">この日程で確定</button>
+      <div class="slot-actions">
+        <button type="button" class="primary confirm-slot" data-slot="${slot.id}">この日程で確定</button>
+        ${canDeleteSlot(slot) ? `<button type="button" class="danger delete-slot" data-slot="${slot.id}">この候補日を削除</button>` : `<button type="button" class="danger delete-slot" disabled>自分が追加した候補のみ削除可</button>`}
+      </div>
     </article>`;
   }).join('');
 
   document.querySelectorAll('.mark-button').forEach((button) => button.addEventListener('click', autoSaveStatus));
   document.querySelectorAll('.save-comment').forEach((button) => button.addEventListener('click', saveComment));
   document.querySelectorAll('.confirm-slot').forEach((button) => button.addEventListener('click', confirmSlot));
+  document.querySelectorAll('.delete-slot').forEach((button) => button.addEventListener('click', deleteSlot));
 }
 
 async function autoSaveStatus(event) {
@@ -583,6 +632,66 @@ async function upsertResponse(slotId, status, comment, successMessage) {
   await loadAllAndRender(false);
   setLoading(false);
   showToast(successMessage);
+}
+
+async function deleteSlot(event) {
+  if (!state.currentMember) return showToast('先にメンバーとして参加してください', 'error');
+
+  const slotId = event.currentTarget.dataset.slot;
+  const slot = state.slots.find((item) => item.id === slotId);
+  if (!slot) return showToast('候補日が見つかりません', 'error');
+  if (!canDeleteSlot(slot)) return showToast('自分が追加した候補日だけ削除できます', 'error');
+
+  const ok = window.confirm(`${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)} を削除しますか？\nこの候補日に入っている全員の○△×回答も消えます。`);
+  if (!ok) return;
+
+  setLoading(true);
+  const { data, error } = await sb.rpc('delete_time_slot_if_owner', {
+    p_time_slot_id: slotId,
+    p_member_id: state.currentMember.id,
+    p_owner_token: state.deviceToken,
+  });
+
+  if (error) {
+    setLoading(false);
+    return fail('候補日の削除に失敗しました。supabase-schema.sqlを再実行してください', error);
+  }
+
+  await loadAllAndRender(false);
+  setLoading(false);
+  if (Number(data || 0) > 0) showToast('候補日を削除しました');
+  else showToast('削除できませんでした。自分が追加した候補日か確認してください', 'error');
+}
+
+async function deleteCurrentMember() {
+  if (!state.currentMember) return showToast('削除する回答者が選ばれていません', 'error');
+  if (!canDeleteCurrentMember()) return showToast('この端末で作成した回答者だけ削除できます', 'error');
+
+  const ok = window.confirm(`${state.currentMember.name} の回答者データを削除しますか？\nこの人の○△×回答もすべて消えます。`);
+  if (!ok) return;
+
+  setLoading(true);
+  const memberId = state.currentMember.id;
+  const { data, error } = await sb.rpc('delete_member_if_owner', {
+    p_member_id: memberId,
+    p_owner_token: state.deviceToken,
+  });
+
+  if (error) {
+    setLoading(false);
+    return fail('回答者の削除に失敗しました。supabase-schema.sqlを再実行してください', error);
+  }
+
+  if (Number(data || 0) > 0) {
+    localStorage.removeItem(`member:${DEFAULT_GROUP_KEY}`);
+    state.currentMember = null;
+    await loadAllAndRender(false);
+    setLoading(false);
+    showToast('回答者データを削除しました');
+  } else {
+    setLoading(false);
+    showToast('削除できませんでした。この端末で作成した回答者か確認してください', 'error');
+  }
 }
 
 async function confirmSlot(event) {
