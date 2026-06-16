@@ -4,9 +4,8 @@
 // 2. 下の2つを書き換える
 // 3. service_role key / secret key は絶対に入れない
 // ============================================================
-const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
-
+const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
