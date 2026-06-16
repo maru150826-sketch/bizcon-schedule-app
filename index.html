@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SAMPO QUEST 空き時間調整</title>
-  <link rel="stylesheet" href="./style.css?v=11" />
+  <link rel="stylesheet" href="./style.css?v=12" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
@@ -65,6 +65,17 @@
       <div id="memberList" class="member-list"></div>
     </section>
 
+    <section id="confirmedSection" class="card priority-card is-hidden">
+      <div class="section-title">
+        <span class="step check-step">✓</span>
+        <div>
+          <h2>確定した作業予定</h2>
+          <p>確定済みの日時を先に表示します。間違えたらここから確定を外せます。</p>
+        </div>
+      </div>
+      <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
+    </section>
+
     <section id="availabilitySection" class="card is-hidden">
       <div class="section-title">
         <span class="step">2</span>
@@ -113,7 +124,7 @@
         <span class="step">3</span>
         <div>
           <h2>集まりやすい日時の提案</h2>
-          <p>入力された空き時間から、○△×ではなく実際に重なっている時間を計算します。</p>
+          <p>似た時間を大量に出さず、アプリが重なりの強い枠だけに自動で絞ります。</p>
         </div>
       </div>
       <div class="control-line">
@@ -125,25 +136,14 @@
             <option value="180">3時間以上</option>
           </select>
         </label>
-        <span class="muted">人数が多い順、×になる人が少ない順で表示します。</span>
+        <span class="muted">最大6件まで自動表示。似ている時間はまとめて減らします。</span>
       </div>
       <div id="suggestionList" class="candidate-list"></div>
     </section>
 
-    <section id="confirmedSection" class="card is-hidden">
-      <div class="section-title">
-        <span class="step">4</span>
-        <div>
-          <h2>確定した作業予定</h2>
-          <p>提案された日時から確定したものを表示します。間違えたら確定を外せます。</p>
-        </div>
-      </div>
-      <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
-    </section>
-
     <section id="availabilityListSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">5</span>
+        <span class="step">4</span>
         <div>
           <h2>みんなの空き時間</h2>
           <p>誰がいつ空いているかを一覧で確認できます。自分の空き時間は編集・削除できます。</p>
@@ -154,7 +154,7 @@
 
     <section id="matrixSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">6</span>
+        <span class="step">5</span>
         <div>
           <h2>日付ごとの入力状況</h2>
           <p>誰がどの日に空き時間を入れているかを確認できます。</p>
@@ -169,6 +169,6 @@
   <footer class="footer">GitHub Pages + Supabase / 固定チーム専用</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=11"></script>
+  <script src="./app.js?v=12"></script>
 </body>
 </html>

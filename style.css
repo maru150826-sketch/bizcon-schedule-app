@@ -134,3 +134,10 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
   .step { width: 30px; height: 30px; }
   .button-row > * { flex: 1 1 100%; }
 }
+.priority-card {
+  border-color: #b7d7bd;
+  background: #fbfff9;
+}
+.check-step {
+  background: var(--good);
+}

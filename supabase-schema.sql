@@ -10,7 +10,24 @@ create table if not exists public.groups (
 );
 
 alter table public.groups add column if not exists app_key text;
-create unique index if not exists groups_app_key_unique on public.groups(app_key);
+
+-- app_key に重複があると unique index を作れないため、重複分は NULL に戻す
+with ranked_groups as (
+  select
+    id,
+    row_number() over (partition by app_key order by created_at, id) as rn
+  from public.groups
+  where app_key is not null
+)
+update public.groups g
+set app_key = null
+from ranked_groups r
+where g.id = r.id
+  and r.rn > 1;
+
+-- 以前に同名の通常indexが作られていても作り直せるようにする
+drop index if exists public.groups_app_key_unique;
+create unique index groups_app_key_unique on public.groups(app_key);
 
 create table if not exists public.members (
   id uuid primary key default gen_random_uuid(),
@@ -145,15 +162,25 @@ create policy "Allow anon insert meeting_notes" on public.meeting_notes for inse
 create policy "Allow anon update meeting_notes" on public.meeting_notes for update to anon using (true) with check (true);
 create policy "Allow anon delete meeting_notes" on public.meeting_notes for delete to anon using (true);
 
-insert into public.groups (app_key, name, description, purpose, admin_name)
-values (
-  'sampo-quest-main',
-  'SAMPO QUEST ビジコンチーム',
-  '空き時間を集めて、全員または多くの人が集まれる作業日時を決めるボード',
-  '企画書・スライド・発表準備を進めるための予定調整',
-  '田丸'
-)
-on conflict (app_key) do update set
-  name = excluded.name,
-  description = excluded.description,
-  purpose = excluded.purpose;
+-- 固定チームを作成/更新する。ON CONFLICT を使わず、既存DBでも安全に実行できる形にする。
+do $$
+begin
+  if exists (select 1 from public.groups where app_key = 'sampo-quest-main') then
+    update public.groups
+    set
+      name = 'SAMPO QUEST ビジコンチーム',
+      description = '空き時間を集めて、全員または多くの人が集まれる作業日時を決めるボード',
+      purpose = '企画書・スライド・発表準備を進めるための予定調整',
+      admin_name = coalesce(admin_name, '田丸')
+    where app_key = 'sampo-quest-main';
+  else
+    insert into public.groups (app_key, name, description, purpose, admin_name)
+    values (
+      'sampo-quest-main',
+      'SAMPO QUEST ビジコンチーム',
+      '空き時間を集めて、全員または多くの人が集まれる作業日時を決めるボード',
+      '企画書・スライド・発表準備を進めるための予定調整',
+      '田丸'
+    );
+  end if;
+end $$;

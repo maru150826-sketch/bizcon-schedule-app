@@ -2,6 +2,9 @@ const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
 
 const APP_KEY = 'sampo-quest-main';
+const SUGGESTION_LIMIT = 6;
+const SUGGESTION_PER_DATE_LIMIT = 2;
+
 const DEFAULT_GROUP = {
   app_key: APP_KEY,
   name: 'SAMPO QUEST ビジコンチーム',
@@ -334,59 +337,123 @@ function buildSuggestions() {
   const minDuration = Number($('minDurationSelect')?.value || 90);
   const dates = [...new Set(state.availability.map((a) => a.date))].sort();
   const locations = ['オンライン', '大学'];
-  const suggestions = [];
-  const seen = new Set();
+  const rawBlocks = [];
 
   for (const date of dates) {
     const daySlots = state.availability.filter((a) => a.date === date);
     if (!daySlots.length) continue;
+
     const minStart = Math.min(...daySlots.map((a) => minutes(a.start_time)));
     const maxEnd = Math.max(...daySlots.map((a) => minutes(a.end_time)));
 
     for (const location of locations) {
-      for (let start = minStart; start + minDuration <= maxEnd; start += 30) {
-        let end = start + minDuration;
-        let availableIds = state.members
+      let blockStart = null;
+      let currentKey = '';
+      let currentIds = [];
+
+      for (let start = minStart; start + 30 <= maxEnd; start += 30) {
+        const end = start + 30;
+        const ids = state.members
           .filter((m) => memberAvailableFor(m.id, date, start, end, location))
           .map((m) => m.id)
           .sort();
-        if (!availableIds.length) continue;
+        const key = ids.join(',');
 
-        let extendedEnd = end;
-        while (extendedEnd + 30 <= maxEnd) {
-          const nextEnd = extendedEnd + 30;
-          const stillAvailable = availableIds.filter((id) => memberAvailableFor(id, date, start, nextEnd, location));
-          if (stillAvailable.length !== availableIds.length) break;
-          extendedEnd = nextEnd;
+        if (key !== currentKey) {
+          pushSuggestionBlock(rawBlocks, date, blockStart, start, location, currentIds, minDuration);
+          blockStart = ids.length ? start : null;
+          currentKey = key;
+          currentIds = ids;
         }
-        end = extendedEnd;
-
-        const key = `${date}-${start}-${end}-${location}-${availableIds.join(',')}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        const missingIds = state.members.map((m) => m.id).filter((id) => !availableIds.includes(id));
-        suggestions.push({
-          date,
-          start_time: timeFromMinutes(start),
-          end_time: timeFromMinutes(end),
-          location,
-          availableIds,
-          missingIds,
-          duration: end - start,
-          score: availableIds.length * 10000 - missingIds.length * 1000 + (end - start)
-        });
       }
+      pushSuggestionBlock(rawBlocks, date, blockStart, maxEnd, location, currentIds, minDuration);
     }
   }
 
-  suggestions.sort((a, b) => {
-    if (b.availableIds.length !== a.availableIds.length) return b.availableIds.length - a.availableIds.length;
-    if (a.missingIds.length !== b.missingIds.length) return a.missingIds.length - b.missingIds.length;
-    if (b.duration !== a.duration) return b.duration - a.duration;
-    return `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`);
+  const merged = mergeSameTimeLocationOptions(rawBlocks);
+  merged.sort(sortSuggestions);
+  return curateSuggestions(merged);
+}
+
+function pushSuggestionBlock(list, date, start, end, location, availableIds, minDuration) {
+  if (start === null || !availableIds.length) return;
+  const duration = end - start;
+  if (duration < minDuration) return;
+  const missingIds = state.members.map((m) => m.id).filter((id) => !availableIds.includes(id));
+  list.push({
+    date,
+    start_time: timeFromMinutes(start),
+    end_time: timeFromMinutes(end),
+    location,
+    availableIds: [...availableIds],
+    missingIds,
+    duration,
+    score: availableIds.length * 10000 - missingIds.length * 1000 + duration
   });
-  return suggestions.slice(0, 20);
+}
+
+function mergeSameTimeLocationOptions(blocks) {
+  const byKey = new Map();
+  for (const item of blocks) {
+    const key = `${item.date}-${item.start_time}-${item.end_time}-${item.availableIds.join(',')}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, { ...item, locations: [item.location] });
+      continue;
+    }
+    const existing = byKey.get(key);
+    existing.locations.push(item.location);
+    existing.location = 'どちらでも';
+  }
+  return [...byKey.values()];
+}
+
+function sortSuggestions(a, b) {
+  if (b.availableIds.length !== a.availableIds.length) return b.availableIds.length - a.availableIds.length;
+  if (a.missingIds.length !== b.missingIds.length) return a.missingIds.length - b.missingIds.length;
+  if (b.duration !== a.duration) return b.duration - a.duration;
+  return `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`);
+}
+
+function curateSuggestions(suggestions) {
+  const selected = [];
+  const perDateCount = new Map();
+
+  for (const item of suggestions) {
+    const dateCount = perDateCount.get(item.date) || 0;
+    if (dateCount >= SUGGESTION_PER_DATE_LIMIT) continue;
+    if (selected.some((chosen) => isSimilarSuggestion(chosen, item))) continue;
+
+    selected.push(item);
+    perDateCount.set(item.date, dateCount + 1);
+    if (selected.length >= SUGGESTION_LIMIT) break;
+  }
+
+  if (selected.length < Math.min(SUGGESTION_LIMIT, suggestions.length)) {
+    for (const item of suggestions) {
+      if (selected.includes(item)) continue;
+      if (selected.some((chosen) => isNearDuplicateSuggestion(chosen, item))) continue;
+      selected.push(item);
+      if (selected.length >= SUGGESTION_LIMIT) break;
+    }
+  }
+
+  return selected.sort(sortByDateTime);
+}
+
+function isSimilarSuggestion(a, b) {
+  if (a.date !== b.date) return false;
+  if (a.location !== b.location && a.location !== 'どちらでも' && b.location !== 'どちらでも') return false;
+  const overlap = Math.min(minutes(a.end_time), minutes(b.end_time)) - Math.max(minutes(a.start_time), minutes(b.start_time));
+  if (overlap <= 0) return false;
+  const shared = a.availableIds.filter((id) => b.availableIds.includes(id)).length;
+  const smaller = Math.min(a.availableIds.length, b.availableIds.length);
+  return smaller > 0 && shared / smaller >= 0.8;
+}
+
+function isNearDuplicateSuggestion(a, b) {
+  if (a.date !== b.date) return false;
+  const overlap = Math.min(minutes(a.end_time), minutes(b.end_time)) - Math.max(minutes(a.start_time), minutes(b.start_time));
+  return overlap >= Math.min(a.duration, b.duration) * 0.75;
 }
 
 async function confirmSuggestion(index) {
