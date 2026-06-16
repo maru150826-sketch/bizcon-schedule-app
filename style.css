@@ -141,3 +141,38 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
 .check-step {
   background: var(--good);
 }
+.week-control {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.week-main {
+  display: grid;
+  gap: 7px;
+  background: #f8f6f1;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px 12px;
+}
+.week-main b { font-size: 17px; letter-spacing: -0.02em; }
+.week-main input { min-height: 42px; padding: 9px 11px; }
+.summary-card {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 18px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+.grouped-card {
+  background: #fffefa;
+}
+.compact-people {
+  gap: 5px;
+}
+@media (max-width: 720px) {
+  .week-control { grid-template-columns: 1fr 1fr; }
+  .week-main { grid-column: 1 / -1; order: -1; }
+  .week-control .ghost { grid-column: 1 / -1; }
+}
