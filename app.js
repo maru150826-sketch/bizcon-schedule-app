@@ -1,5 +1,5 @@
 // ============================================================
-// SAMPO QUEST fixed-team scheduler
+// SAMPO QUEST fixed-team scheduler v4
 // GitHub Pages用。secret key / service_role key は絶対に入れないでください。
 // ============================================================
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
@@ -14,6 +14,7 @@ const DEFAULT_GROUP = {
   admin_name: '田丸',
 };
 
+const AUTO_REFRESH_MS = 30000;
 const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const state = {
@@ -24,6 +25,7 @@ const state = {
   slots: [],
   responses: [],
   notes: [],
+  selectedTasks: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +35,7 @@ const els = {
   setupNotice: $('setupNotice'),
   groupSection: $('groupSection'),
   memberSection: $('memberSection'),
+  bestSection: $('bestSection'),
   confirmedSection: $('confirmedSection'),
   slotSection: $('slotSection'),
   candidateSection: $('candidateSection'),
@@ -63,7 +66,7 @@ function showToast(message, type = 'info') {
   els.toast.className = `toast ${type === 'error' ? 'error' : ''}`;
   els.toast.classList.remove('is-hidden');
   clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => els.toast.classList.add('is-hidden'), 3800);
+  showToast.timer = setTimeout(() => els.toast.classList.add('is-hidden'), 3300);
 }
 
 function fail(message, error) {
@@ -99,6 +102,13 @@ function statusMark(status) {
   return '未';
 }
 
+function statusLabel(status) {
+  if (status === 'available') return '参加できる';
+  if (status === 'maybe') return '条件付き';
+  if (status === 'unavailable') return '参加できない';
+  return '未回答';
+}
+
 function statusClass(status) {
   return status ? `status-${status}` : 'status-none';
 }
@@ -108,6 +118,25 @@ function setToday() {
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
 }
 
+function buildTimeOptions() {
+  const start = $('slotStart');
+  const end = $('slotEnd');
+  const options = [];
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    for (const minute of [0, 30]) {
+      const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      const label = `${hour}:${String(minute).padStart(2, '0')}`;
+      options.push(`<option value="${value}">${label}</option>`);
+    }
+  }
+
+  start.innerHTML = options.join('');
+  end.innerHTML = options.join('');
+  start.value = '18:00';
+  end.value = '21:00';
+}
+
 async function init() {
   if (!isConfigured()) {
     els.setupNotice.classList.remove('is-hidden');
@@ -115,44 +144,41 @@ async function init() {
   }
 
   bindEvents();
+  buildTimeOptions();
   setToday();
   await loadOrCreateDefaultGroup();
+  setInterval(() => loadAllAndRender(false), AUTO_REFRESH_MS);
 }
 
 function bindEvents() {
   els.memberForm.addEventListener('submit', joinMember);
   els.slotForm.addEventListener('submit', addSlot);
   els.notesForm.addEventListener('submit', saveNotes);
-
-  document.querySelectorAll('#timePresetList .chip').forEach((button) => {
-    button.addEventListener('click', () => {
-      selectChip('#timePresetList .chip', button);
-      $('slotStart').value = button.dataset.start;
-      $('slotEnd').value = button.dataset.end;
-      $('selectedTimeText').textContent = `${button.dataset.start}〜${button.dataset.end}`;
-    });
-  });
+  $('refreshButton').addEventListener('click', () => loadAllAndRender(true));
 
   document.querySelectorAll('#taskPresetList .chip').forEach((button) => {
-    button.addEventListener('click', () => {
-      selectChip('#taskPresetList .chip', button);
-      $('slotTask').value = button.dataset.task;
-      $('selectedTaskText').textContent = button.dataset.task;
-    });
+    button.addEventListener('click', () => toggleTask(button));
   });
 
   document.querySelectorAll('#locationPresetList .chip').forEach((button) => {
     button.addEventListener('click', () => {
-      selectChip('#locationPresetList .chip', button);
+      document.querySelectorAll('#locationPresetList .chip').forEach((b) => b.classList.remove('is-active'));
+      button.classList.add('is-active');
       $('slotLocation').value = button.dataset.location;
       $('selectedLocationText').textContent = button.dataset.location;
     });
   });
 }
 
-function selectChip(selector, activeButton) {
-  document.querySelectorAll(selector).forEach((button) => button.classList.remove('is-active'));
-  activeButton.classList.add('is-active');
+function toggleTask(button) {
+  const task = button.dataset.task;
+  button.classList.toggle('is-active');
+  if (state.selectedTasks.includes(task)) {
+    state.selectedTasks = state.selectedTasks.filter((item) => item !== task);
+  } else {
+    state.selectedTasks.push(task);
+  }
+  $('selectedTaskText').textContent = state.selectedTasks.length ? state.selectedTasks.join(' / ') : '未選択';
 }
 
 async function loadOrCreateDefaultGroup() {
@@ -172,7 +198,7 @@ async function loadOrCreateDefaultGroup() {
   if (data) {
     state.group = data;
     state.groupId = data.id;
-    await loadAllAndRender();
+    await loadAllAndRender(false);
     setLoading(false);
     return;
   }
@@ -185,13 +211,21 @@ async function loadOrCreateDefaultGroup() {
 
   state.group = created.data;
   state.groupId = created.data.id;
-  await loadAllAndRender();
+  await loadAllAndRender(false);
   setLoading(false);
 }
 
-async function loadAllAndRender() {
-  await loadAll();
-  render();
+async function loadAllAndRender(showMessage = false) {
+  try {
+    if (showMessage) setLoading(true);
+    await loadAll();
+    render();
+    if (showMessage) showToast('最新状況を読み込みました');
+  } catch (error) {
+    fail('データの読み込みに失敗しました', error);
+  } finally {
+    if (showMessage) setLoading(false);
+  }
 }
 
 async function loadAll() {
@@ -216,7 +250,7 @@ async function loadAll() {
 }
 
 function render() {
-  for (const section of [els.groupSection, els.memberSection, els.confirmedSection, els.slotSection, els.candidateSection, els.tableSection]) {
+  for (const section of [els.groupSection, els.memberSection, els.bestSection, els.confirmedSection, els.slotSection, els.candidateSection, els.tableSection]) {
     section.classList.remove('is-hidden');
   }
 
@@ -225,6 +259,7 @@ function render() {
   $('groupPurpose').textContent = state.group.purpose || '';
 
   renderMembers();
+  renderBest();
   renderConfirmed();
   renderCandidates();
   renderTable();
@@ -237,7 +272,8 @@ function renderMembers() {
     currentBox.classList.remove('is-hidden');
     currentBox.innerHTML = `現在の回答者：<b>${esc(state.currentMember.name)}</b>${state.currentMember.role_memo ? ` / ${esc(state.currentMember.role_memo)}` : ''}`;
   } else {
-    currentBox.classList.add('is-hidden');
+    currentBox.classList.remove('is-hidden');
+    currentBox.innerHTML = 'まだ回答者が選ばれていません。先に自分の名前を入力してください。';
   }
 
   $('memberList').innerHTML = state.members.length
@@ -253,13 +289,22 @@ async function joinMember(event) {
   const name = form.get('name')?.trim();
   const role_memo = form.get('role_memo')?.trim();
 
+  if (!name) {
+    setLoading(false);
+    return showToast('名前を入力してください', 'error');
+  }
+
   const existing = state.members.find((member) => member.name === name);
   if (existing) {
     if (role_memo && role_memo !== existing.role_memo) {
-      await sb.from('members').update({ role_memo }).eq('id', existing.id);
+      const updated = await sb.from('members').update({ role_memo }).eq('id', existing.id);
+      if (updated.error) {
+        setLoading(false);
+        return fail('メンバー情報の更新に失敗しました', updated.error);
+      }
     }
     localStorage.setItem(`member:${DEFAULT_GROUP_KEY}`, existing.id);
-    await loadAllAndRender();
+    await loadAllAndRender(false);
     setLoading(false);
     showToast('既存メンバーとして参加しました');
     return;
@@ -277,7 +322,8 @@ async function joinMember(event) {
   }
 
   localStorage.setItem(`member:${DEFAULT_GROUP_KEY}`, data.id);
-  await loadAllAndRender();
+  event.currentTarget.reset();
+  await loadAllAndRender(false);
   setLoading(false);
   showToast('メンバーとして参加しました');
 }
@@ -289,18 +335,25 @@ async function addSlot(event) {
   const date = form.get('date');
   const start_time = form.get('start_time');
   const end_time = form.get('end_time');
+  const location = form.get('location');
+  const taskExtra = form.get('task_extra')?.trim();
+  const memo = form.get('memo')?.trim();
 
   if (!date) return showToast('日付を選んでください', 'error');
-  if (!start_time || !end_time) return showToast('時間帯を選んでください', 'error');
+  if (!start_time || !end_time) return showToast('開始時間と終了時間を選んでください', 'error');
+  if (start_time >= end_time) return showToast('終了時間は開始時間より後にしてください', 'error');
+  if (!state.selectedTasks.length && !taskExtra) return showToast('作業内容を1つ以上選ぶか、作業内容メモを入力してください', 'error');
+  if (!location) return showToast('場所を選んでください', 'error');
 
+  const taskTitle = [state.selectedTasks.join(' / '), taskExtra].filter(Boolean).join('：');
   const payload = {
     group_id: state.groupId,
     date,
     start_time,
     end_time,
-    task_title: form.get('task_title')?.trim(),
-    location: form.get('location')?.trim(),
-    memo: form.get('memo')?.trim(),
+    task_title: taskTitle,
+    location,
+    memo,
   };
 
   setLoading(true);
@@ -312,44 +365,106 @@ async function addSlot(event) {
   }
 
   event.currentTarget.reset();
-  clearPresetUi();
+  clearCandidateInput();
+  buildTimeOptions();
   setToday();
-  await loadAllAndRender();
+  await loadAllAndRender(false);
   setLoading(false);
   showToast('候補日時を追加しました');
 }
 
-function clearPresetUi() {
+function clearCandidateInput() {
+  state.selectedTasks = [];
   document.querySelectorAll('.chip').forEach((button) => button.classList.remove('is-active'));
-  $('selectedTimeText').textContent = '未選択';
   $('selectedTaskText').textContent = '未選択';
   $('selectedLocationText').textContent = '未選択';
+  $('slotLocation').value = '';
+}
+
+function slotResponses(slotId) {
+  return state.responses.filter((response) => response.time_slot_id === slotId);
 }
 
 function counts(slotId) {
-  const rows = state.responses.filter((response) => response.time_slot_id === slotId);
+  const rows = slotResponses(slotId);
   return {
     available: rows.filter((response) => response.status === 'available').length,
     maybe: rows.filter((response) => response.status === 'maybe').length,
     unavailable: rows.filter((response) => response.status === 'unavailable').length,
+    answered: rows.length,
+    total: state.members.length,
   };
 }
 
-function bestSlotId() {
+function slotScore(slot) {
+  const c = counts(slot.id);
+  return {
+    fit: c.available + c.maybe,
+    available: c.available,
+    maybe: c.maybe,
+    unavailable: c.unavailable,
+    answered: c.answered,
+  };
+}
+
+function bestSlot() {
   if (!state.slots.length) return null;
   return [...state.slots].sort((a, b) => {
-    const ca = counts(a.id);
-    const cb = counts(b.id);
-    return (cb.available - ca.available) || (ca.unavailable - cb.unavailable) || (cb.maybe - ca.maybe);
-  })[0]?.id;
+    const sa = slotScore(a);
+    const sbScore = slotScore(b);
+    return (sbScore.fit - sa.fit)
+      || (sbScore.available - sa.available)
+      || (sa.unavailable - sbScore.unavailable)
+      || (sbScore.answered - sa.answered)
+      || (new Date(`${a.date}T${a.start_time}`) - new Date(`${b.date}T${b.start_time}`));
+  })[0];
 }
 
 function judge(slot) {
   const c = counts(slot.id);
-  if (slot.id === bestSlotId() && (c.available > 0 || c.maybe > 0)) return '最有力';
-  if (c.unavailable >= Math.max(1, Math.ceil(state.members.length / 2))) return '微妙';
+  const best = bestSlot();
+  if (slot.is_confirmed) return '確定';
+  if (best?.id === slot.id && c.available + c.maybe > 0) return '最有力';
+  if (c.unavailable >= Math.max(1, Math.ceil(Math.max(state.members.length, 1) / 2))) return '微妙';
   if (c.available + c.maybe > 0) return '候補';
   return '未回答';
+}
+
+function memberResponse(memberId, slotId) {
+  return state.responses.find((item) => item.member_id === memberId && item.time_slot_id === slotId);
+}
+
+function answeredMembers(slotId) {
+  return state.members.filter((member) => memberResponse(member.id, slotId));
+}
+
+function unansweredMembers(slotId) {
+  return state.members.filter((member) => !memberResponse(member.id, slotId));
+}
+
+function latestResponseName(slotId) {
+  const latest = [...slotResponses(slotId)]
+    .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))[0];
+  if (!latest) return 'まだ回答なし';
+  const member = state.members.find((item) => item.id === latest.member_id);
+  return `${member?.name || '不明'} が最後に回答`;
+}
+
+function renderBest() {
+  const slot = bestSlot();
+  if (!slot) {
+    $('bestBox').className = 'empty';
+    $('bestBox').textContent = 'まだ候補日時がありません。';
+    return;
+  }
+
+  const c = counts(slot.id);
+  $('bestBox').className = 'small-box';
+  $('bestBox').innerHTML = `<b>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</b><br>
+    作業内容：${esc(slot.task_title || '未設定')}<br>
+    場所：${esc(slot.location || '未設定')}<br>
+    集計：○ ${c.available} / △ ${c.maybe} / × ${c.unavailable} / 未回答 ${Math.max(c.total - c.answered, 0)}<br>
+    判定：<b>${judge(slot)}</b>`;
 }
 
 function renderCandidates() {
@@ -359,65 +474,99 @@ function renderCandidates() {
   }
 
   els.candidateList.innerHTML = state.slots.map((slot) => {
-    const myResponse = state.currentMember
-      ? state.responses.find((response) => response.time_slot_id === slot.id && response.member_id === state.currentMember.id)
-      : null;
+    const myResponse = state.currentMember ? memberResponse(state.currentMember.id, slot.id) : null;
     const c = counts(slot.id);
+    const unanswered = unansweredMembers(slot.id);
+    const memberVotes = state.members.length
+      ? state.members.map((member) => {
+          const response = memberResponse(member.id, slot.id);
+          return `<div class="vote-row">
+            <span class="status-badge ${statusClass(response?.status)}">${statusMark(response?.status)}</span>
+            <div>
+              <div class="vote-name">${esc(member.name)} <span class="muted">${statusLabel(response?.status)}</span></div>
+              ${response?.comment ? `<div class="vote-comment">${esc(response.comment)}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('')
+      : '<div class="empty">まだメンバーがいません。</div>';
 
     return `<article class="slot-card ${slot.is_confirmed ? 'confirmed' : ''}">
       <div class="slot-top">
         <div>
           <div class="slot-time">${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</div>
-          <div class="slot-meta">作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}<br>メモ：${esc(slot.memo || '')}</div>
+          <div class="slot-meta">作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}${slot.memo ? `<br>メモ：${esc(slot.memo)}` : ''}</div>
         </div>
-        <div class="judge">${slot.is_confirmed ? '確定' : judge(slot)}</div>
+        <div class="judge">${judge(slot)}</div>
       </div>
-      <div class="slot-meta">○ ${c.available} / △ ${c.maybe} / × ${c.unavailable}</div>
+
+      <div class="count-row">
+        <div class="count-box"><b>${c.available}</b><span>○ 参加</span></div>
+        <div class="count-box"><b>${c.maybe}</b><span>△ 条件付き</span></div>
+        <div class="count-box"><b>${c.unavailable}</b><span>× 不可</span></div>
+        <div class="count-box"><b>${c.answered}/${c.total}</b><span>回答済み</span></div>
+      </div>
+
+      <div class="unanswered-box">${latestResponseName(slot.id)} / 未回答：${esc(unanswered.map((m) => m.name).join('、') || 'なし')}</div>
+
       <div class="response-row">
-        <div class="mark-buttons" data-slot="${slot.id}">
-          <button type="button" class="mark-button ${myResponse?.status === 'available' ? 'is-active' : ''}" data-status="available" ${!state.currentMember ? 'disabled' : ''}>○</button>
-          <button type="button" class="mark-button ${myResponse?.status === 'maybe' ? 'is-active' : ''}" data-status="maybe" ${!state.currentMember ? 'disabled' : ''}>△</button>
-          <button type="button" class="mark-button ${myResponse?.status === 'unavailable' ? 'is-active' : ''}" data-status="unavailable" ${!state.currentMember ? 'disabled' : ''}>×</button>
+        <div>
+          <label>あなたの回答</label>
+          <div class="mark-buttons" data-slot="${slot.id}">
+            <button type="button" class="mark-button ${myResponse?.status === 'available' ? 'is-active' : ''}" data-status="available" ${!state.currentMember ? 'disabled' : ''}>○</button>
+            <button type="button" class="mark-button ${myResponse?.status === 'maybe' ? 'is-active' : ''}" data-status="maybe" ${!state.currentMember ? 'disabled' : ''}>△</button>
+            <button type="button" class="mark-button ${myResponse?.status === 'unavailable' ? 'is-active' : ''}" data-status="unavailable" ${!state.currentMember ? 'disabled' : ''}>×</button>
+          </div>
         </div>
-        <label>コメント
+        <label>コメント 任意
           <input data-slot="${slot.id}" class="comment-input" value="${esc(myResponse?.comment || '')}" placeholder="例：19時からなら参加できます" ${!state.currentMember ? 'disabled' : ''} />
         </label>
-        <button type="button" class="secondary save-response" data-slot="${slot.id}" ${!state.currentMember ? 'disabled' : ''}>保存</button>
+        <button type="button" class="secondary save-comment" data-slot="${slot.id}" ${!state.currentMember ? 'disabled' : ''}>コメント保存</button>
       </div>
-      <button type="button" class="primary confirm-slot" data-slot="${slot.id}" style="margin-top:12px;">この日時で確定</button>
+
+      <div class="vote-list">
+        <b>他の人の投票状況</b>
+        ${memberVotes}
+      </div>
+
+      <button type="button" class="primary confirm-slot" data-slot="${slot.id}" style="margin-top:12px;">この日程で確定</button>
     </article>`;
   }).join('');
 
-  document.querySelectorAll('.mark-button').forEach((button) => button.addEventListener('click', selectStatusButton));
-  document.querySelectorAll('.save-response').forEach((button) => button.addEventListener('click', saveResponse));
+  document.querySelectorAll('.mark-button').forEach((button) => button.addEventListener('click', autoSaveStatus));
+  document.querySelectorAll('.save-comment').forEach((button) => button.addEventListener('click', saveComment));
   document.querySelectorAll('.confirm-slot').forEach((button) => button.addEventListener('click', confirmSlot));
 }
 
-function selectStatusButton(event) {
+async function autoSaveStatus(event) {
+  if (!state.currentMember) return showToast('先にメンバーとして参加してください', 'error');
+
   const button = event.currentTarget;
-  const parent = button.closest('.mark-buttons');
-  parent.querySelectorAll('.mark-button').forEach((b) => b.classList.remove('is-active'));
-  button.classList.add('is-active');
-  parent.dataset.status = button.dataset.status;
+  const slotId = button.closest('.mark-buttons').dataset.slot;
+  const status = button.dataset.status;
+  const comment = document.querySelector(`.comment-input[data-slot="${slotId}"]`)?.value.trim() || '';
+
+  await upsertResponse(slotId, status, comment, '回答を保存しました');
 }
 
-async function saveResponse(event) {
+async function saveComment(event) {
   if (!state.currentMember) return showToast('先にメンバーとして参加してください', 'error');
 
   const slotId = event.currentTarget.dataset.slot;
-  const buttonGroup = document.querySelector(`.mark-buttons[data-slot="${slotId}"]`);
-  const selected = buttonGroup.dataset.status || buttonGroup.querySelector('.mark-button.is-active')?.dataset.status;
-  const comment = document.querySelector(`.comment-input[data-slot="${slotId}"]`).value.trim();
+  const existing = memberResponse(state.currentMember.id, slotId);
+  if (!existing) return showToast('先に○△×を押してください', 'error');
 
-  if (!selected) return showToast('○△×を選択してください', 'error');
+  const comment = document.querySelector(`.comment-input[data-slot="${slotId}"]`)?.value.trim() || '';
+  await upsertResponse(slotId, existing.status, comment, 'コメントを保存しました');
+}
 
+async function upsertResponse(slotId, status, comment, successMessage) {
   setLoading(true);
-  const existing = state.responses.find((response) => response.member_id === state.currentMember.id && response.time_slot_id === slotId);
+  const existing = memberResponse(state.currentMember.id, slotId);
   const payload = {
     group_id: state.groupId,
     member_id: state.currentMember.id,
     time_slot_id: slotId,
-    status: selected,
+    status,
     comment,
     updated_at: new Date().toISOString(),
   };
@@ -431,15 +580,20 @@ async function saveResponse(event) {
     return fail('回答保存に失敗しました', result.error);
   }
 
-  await loadAllAndRender();
+  await loadAllAndRender(false);
   setLoading(false);
-  showToast('回答を保存しました');
+  showToast(successMessage);
 }
 
 async function confirmSlot(event) {
   const slotId = event.currentTarget.dataset.slot;
-  setLoading(true);
+  const slot = state.slots.find((item) => item.id === slotId);
+  const c = counts(slotId);
 
+  const ok = window.confirm(`${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)} を確定しますか？\n○+△=${c.available + c.maybe}人 / ×=${c.unavailable}人`);
+  if (!ok) return;
+
+  setLoading(true);
   const reset = await sb.from('time_slots').update({ is_confirmed: false }).eq('group_id', state.groupId);
   const confirm = await sb.from('time_slots').update({ is_confirmed: true }).eq('id', slotId);
 
@@ -448,7 +602,7 @@ async function confirmSlot(event) {
     return fail('確定日時の保存に失敗しました', reset.error || confirm.error);
   }
 
-  await loadAllAndRender();
+  await loadAllAndRender(false);
   setLoading(false);
   showToast('日時を確定しました');
 }
@@ -473,7 +627,12 @@ function renderConfirmed() {
     .filter(Boolean);
 
   $('confirmedBox').className = 'small-box confirmed';
-  $('confirmedBox').innerHTML = `<b>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</b><br>作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}<br>参加予定者：${esc(availableMembers.join('、') || 'なし')}<br>条件付き参加者：${esc(maybeMembers.join('、') || 'なし')}<br>メモ：${esc(slot.memo || '')}`;
+  $('confirmedBox').innerHTML = `<b>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</b><br>
+    作業内容：${esc(slot.task_title || '未設定')}<br>
+    場所：${esc(slot.location || '未設定')}<br>
+    参加予定者：${esc(availableMembers.join('、') || 'なし')}<br>
+    条件付き参加者：${esc(maybeMembers.join('、') || 'なし')}<br>
+    メモ：${esc(slot.memo || '')}`;
 }
 
 function renderTable() {
@@ -482,15 +641,16 @@ function renderTable() {
     return;
   }
 
-  const head = `<tr><th>候補日時</th><th>作業内容</th><th>場所</th>${state.members.map((member) => `<th>${esc(member.name)}</th>`).join('')}<th>○人数</th><th>△人数</th><th>×人数</th><th>判定</th></tr>`;
+  const head = `<tr><th>候補日時</th><th>作業内容</th><th>場所</th>${state.members.map((member) => `<th>${esc(member.name)}</th>`).join('')}<th>○+△</th><th>○人数</th><th>△人数</th><th>×人数</th><th>未回答</th><th>判定</th></tr>`;
   const body = state.slots.map((slot) => {
     const c = counts(slot.id);
     const memberCells = state.members.map((member) => {
-      const response = state.responses.find((item) => item.member_id === member.id && item.time_slot_id === slot.id);
+      const response = memberResponse(member.id, slot.id);
       return `<td><span class="status-badge ${statusClass(response?.status)}">${statusMark(response?.status)}</span>${response?.comment ? `<br><small>${esc(response.comment)}</small>` : ''}</td>`;
     }).join('');
 
-    return `<tr><td>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</td><td>${esc(slot.task_title || '')}</td><td>${esc(slot.location || '')}</td>${memberCells}<td>${c.available}</td><td>${c.maybe}</td><td>${c.unavailable}</td><td class="judge">${slot.is_confirmed ? '確定' : judge(slot)}</td></tr>`;
+    const unanswered = Math.max(c.total - c.answered, 0);
+    return `<tr><td>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</td><td>${esc(slot.task_title || '')}</td><td>${esc(slot.location || '')}</td>${memberCells}<td>${c.available + c.maybe}</td><td>${c.available}</td><td>${c.maybe}</td><td>${c.unavailable}</td><td>${unanswered}</td><td class="judge">${judge(slot)}</td></tr>`;
   }).join('');
 
   els.summaryTable.innerHTML = head + body;
@@ -536,7 +696,7 @@ async function saveNotes(event) {
     return fail('メモ保存に失敗しました', result.error);
   }
 
-  await loadAllAndRender();
+  await loadAllAndRender(false);
   setLoading(false);
   showToast('メモを保存しました');
 }
