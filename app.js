@@ -1,5 +1,5 @@
 // ============================================================
-// SAMPO QUEST fixed-team scheduler v7
+// SAMPO QUEST fixed-team scheduler v8 lightweight
 // GitHub Pages用。secret key / service_role key は絶対に入れないでください。
 // ============================================================
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
@@ -14,7 +14,7 @@ const DEFAULT_GROUP = {
   admin_name: '田丸',
 };
 
-const AUTO_REFRESH_MS = 30000;
+const AUTO_REFRESH_MS = 120000;
 const ACTIVE_MEMBER_KEY = `active-member:${DEFAULT_GROUP_KEY}`;
 const DEVICE_TOKEN_KEY = `device-token:${DEFAULT_GROUP_KEY}`;
 const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -27,6 +27,7 @@ const state = {
   slots: [],
   responses: [],
   notes: [],
+  noteSlotId: null,
   selectedTasks: [],
   deviceToken: null,
 };
@@ -96,6 +97,10 @@ function jpDate(date) {
 
 function hm(time) {
   return String(time || '').slice(0, 5);
+}
+
+function displayLocation(location) {
+  return location === 'Zoom' ? 'オンライン' : location;
 }
 
 function statusMark(status) {
@@ -175,7 +180,6 @@ async function init() {
   state.deviceToken = getDeviceToken();
   bindEvents();
   buildTimeOptions();
-  setToday();
   await loadOrCreateDefaultGroup();
   setInterval(() => loadAllAndRender(false), AUTO_REFRESH_MS);
 }
@@ -434,7 +438,6 @@ async function addSlot(event) {
   event.currentTarget.reset();
   clearCandidateInput();
   buildTimeOptions();
-  setToday();
   await loadAllAndRender(false);
   setLoading(false);
   showToast('候補日時を追加しました');
@@ -529,7 +532,7 @@ function renderBest() {
   $('bestBox').className = 'small-box';
   $('bestBox').innerHTML = `<b>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</b><br>
     作業内容：${esc(slot.task_title || '未設定')}<br>
-    場所：${esc(slot.location || '未設定')}<br>
+    場所：${esc(displayLocation(slot.location) || '未設定')}<br>
     集計：○ ${c.available} / △ ${c.maybe} / × ${c.unavailable} / 未回答 ${Math.max(c.total - c.answered, 0)}<br>
     判定：<b>${judge(slot)}</b>`;
 }
@@ -561,7 +564,7 @@ function renderCandidates() {
       <div class="slot-top">
         <div>
           <div class="slot-time">${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</div>
-          <div class="slot-meta">作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(slot.location || '未設定')}<br>追加した人：${esc(slotCreatorName(slot))}${slot.memo ? `<br>メモ：${esc(slot.memo)}` : ''}</div>
+          <div class="slot-meta">作業内容：${esc(slot.task_title || '未設定')}<br>場所：${esc(displayLocation(slot.location) || '未設定')}<br>追加した人：${esc(slotCreatorName(slot))}${slot.memo ? `<br>メモ：${esc(slot.memo)}` : ''}</div>
         </div>
         <div class="judge">${judge(slot)}</div>
       </div>
@@ -596,7 +599,7 @@ function renderCandidates() {
       </div>
 
       <div class="slot-actions">
-        <button type="button" class="primary confirm-slot" data-slot="${slot.id}">この日程で確定</button>
+        <button type="button" class="primary confirm-slot" data-slot="${slot.id}">${slot.is_confirmed ? '確定を外す' : 'この日程で確定'}</button>
         ${canDeleteSlot(slot) ? `<button type="button" class="danger delete-slot" data-slot="${slot.id}">この候補日を削除</button>` : `<button type="button" class="danger delete-slot" disabled>自分が追加した候補のみ削除可</button>`}
       </div>
     </article>`;
@@ -631,28 +634,46 @@ async function saveComment(event) {
 }
 
 async function upsertResponse(slotId, status, comment, successMessage) {
-  setLoading(true);
   const existing = memberResponse(state.currentMember.id, slotId);
+  const previousResponses = state.responses.map((response) => ({ ...response }));
+  const now = new Date().toISOString();
   const payload = {
     group_id: state.groupId,
     member_id: state.currentMember.id,
     time_slot_id: slotId,
     status,
     comment,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   };
 
+  let localId = null;
+  if (existing) {
+    Object.assign(existing, payload);
+  } else {
+    localId = `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    state.responses.push({ id: localId, ...payload });
+  }
+
+  render();
+  showToast('保存中...');
+
   const result = existing
-    ? await sb.from('responses').update(payload).eq('id', existing.id)
-    : await sb.from('responses').insert(payload);
+    ? await sb.from('responses').update(payload).eq('id', existing.id).select().single()
+    : await sb.from('responses').insert(payload).select().single();
 
   if (result.error) {
-    setLoading(false);
+    state.responses = previousResponses;
+    render();
     return fail('回答保存に失敗しました', result.error);
   }
 
-  await loadAllAndRender(false);
-  setLoading(false);
+  if (!existing && localId) {
+    state.responses = state.responses.map((response) => response.id === localId ? result.data : response);
+  } else if (existing && result.data) {
+    state.responses = state.responses.map((response) => response.id === existing.id ? result.data : response);
+  }
+
+  render();
   showToast(successMessage);
 }
 
@@ -717,51 +738,74 @@ async function deleteCurrentMember() {
 async function confirmSlot(event) {
   const slotId = event.currentTarget.dataset.slot;
   const slot = state.slots.find((item) => item.id === slotId);
-  const c = counts(slotId);
+  if (!slot) return showToast('候補日が見つかりません', 'error');
 
-  const ok = window.confirm(`${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)} を確定しますか？\n○+△=${c.available + c.maybe}人 / ×=${c.unavailable}人`);
+  const c = counts(slotId);
+  const nextValue = !slot.is_confirmed;
+  const message = nextValue
+    ? `${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)} を確定しますか？\n○+△=${c.available + c.maybe}人 / ×=${c.unavailable}人`
+    : `${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)} の確定を外しますか？`;
+
+  const ok = window.confirm(message);
   if (!ok) return;
 
-  setLoading(true);
-  const reset = await sb.from('time_slots').update({ is_confirmed: false }).eq('group_id', state.groupId);
-  const confirm = await sb.from('time_slots').update({ is_confirmed: true }).eq('id', slotId);
+  const previousSlots = state.slots.map((item) => ({ ...item }));
+  state.slots = state.slots.map((item) => item.id === slotId ? { ...item, is_confirmed: nextValue } : item);
+  render();
+  showToast('保存中...');
 
-  if (reset.error || confirm.error) {
-    setLoading(false);
-    return fail('確定日時の保存に失敗しました', reset.error || confirm.error);
+  const { error } = await sb.from('time_slots').update({ is_confirmed: nextValue }).eq('id', slotId);
+
+  if (error) {
+    state.slots = previousSlots;
+    render();
+    return fail('確定状態の保存に失敗しました', error);
   }
 
-  await loadAllAndRender(false);
-  setLoading(false);
-  showToast('日時を確定しました');
+  showToast(nextValue ? '日時を確定しました' : '確定を外しました');
 }
 
 function renderConfirmed() {
-  const slot = state.slots.find((item) => item.is_confirmed);
+  const confirmedSlots = state.slots.filter((item) => item.is_confirmed);
 
-  if (!slot) {
+  if (!confirmedSlots.length) {
     $('confirmedBox').className = 'empty';
     $('confirmedBox').textContent = 'まだ確定した作業予定はありません。';
     return;
   }
 
-  const availableMembers = state.responses
-    .filter((response) => response.time_slot_id === slot.id && response.status === 'available')
-    .map((response) => state.members.find((member) => member.id === response.member_id)?.name)
-    .filter(Boolean);
+  $('confirmedBox').className = 'confirmed-list';
+  $('confirmedBox').innerHTML = confirmedSlots.map((slot) => {
+    const availableMembers = state.responses
+      .filter((response) => response.time_slot_id === slot.id && response.status === 'available')
+      .map((response) => state.members.find((member) => member.id === response.member_id)?.name)
+      .filter(Boolean);
 
-  const maybeMembers = state.responses
-    .filter((response) => response.time_slot_id === slot.id && response.status === 'maybe')
-    .map((response) => state.members.find((member) => member.id === response.member_id)?.name)
-    .filter(Boolean);
+    const maybeMembers = state.responses
+      .filter((response) => response.time_slot_id === slot.id && response.status === 'maybe')
+      .map((response) => state.members.find((member) => member.id === response.member_id)?.name)
+      .filter(Boolean);
 
-  $('confirmedBox').className = 'small-box confirmed';
-  $('confirmedBox').innerHTML = `<b>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</b><br>
-    作業内容：${esc(slot.task_title || '未設定')}<br>
-    場所：${esc(slot.location || '未設定')}<br>
-    参加予定者：${esc(availableMembers.join('、') || 'なし')}<br>
-    条件付き参加者：${esc(maybeMembers.join('、') || 'なし')}<br>
-    メモ：${esc(slot.memo || '')}`;
+    return `<div class="small-box confirmed confirmed-item">
+      <b>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</b><br>
+      作業内容：${esc(slot.task_title || '未設定')}<br>
+      場所：${esc(displayLocation(slot.location) || '未設定')}<br>
+      参加予定者：${esc(availableMembers.join('、') || 'なし')}<br>
+      条件付き参加者：${esc(maybeMembers.join('、') || 'なし')}<br>
+      メモ：${esc(slot.memo || '')}
+      <div class="confirmed-actions">
+        <button type="button" class="secondary edit-note-target" data-slot="${slot.id}">この日のメモを編集</button>
+        <button type="button" class="danger confirm-slot" data-slot="${slot.id}">確定を外す</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('#confirmedBox .confirm-slot').forEach((button) => button.addEventListener('click', confirmSlot));
+  document.querySelectorAll('#confirmedBox .edit-note-target').forEach((button) => button.addEventListener('click', (event) => {
+    state.noteSlotId = event.currentTarget.dataset.slot;
+    renderNotes();
+    $('notesSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
 }
 
 function renderTable() {
@@ -779,16 +823,51 @@ function renderTable() {
     }).join('');
 
     const unanswered = Math.max(c.total - c.answered, 0);
-    return `<tr><td>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</td><td>${esc(slot.task_title || '')}</td><td>${esc(slot.location || '')}</td>${memberCells}<td>${c.available + c.maybe}</td><td>${c.available}</td><td>${c.maybe}</td><td>${c.unavailable}</td><td>${unanswered}</td><td class="judge">${judge(slot)}</td></tr>`;
+    return `<tr><td>${jpDate(slot.date)} ${hm(slot.start_time)}〜${hm(slot.end_time)}</td><td>${esc(slot.task_title || '')}</td><td>${esc(displayLocation(slot.location) || '')}</td>${memberCells}<td>${c.available + c.maybe}</td><td>${c.available}</td><td>${c.maybe}</td><td>${c.unavailable}</td><td>${unanswered}</td><td class="judge">${judge(slot)}</td></tr>`;
   }).join('');
 
   els.summaryTable.innerHTML = head + body;
 }
 
+function confirmedSlots() {
+  return state.slots.filter((item) => item.is_confirmed);
+}
+
+function currentNoteSlot() {
+  const slots = confirmedSlots();
+  if (!slots.length) return null;
+  if (!state.noteSlotId || !slots.some((slot) => slot.id === state.noteSlotId)) {
+    state.noteSlotId = slots[0].id;
+  }
+  return slots.find((slot) => slot.id === state.noteSlotId) || slots[0];
+}
+
+function ensureNoteSlotPicker() {
+  let box = $('noteSlotPickerBox');
+  if (box) return box;
+  box = document.createElement('div');
+  box.id = 'noteSlotPickerBox';
+  box.className = 'note-picker-box full';
+  els.notesForm.parentNode.insertBefore(box, els.notesForm);
+  return box;
+}
+
 function renderNotes() {
-  const slot = state.slots.find((item) => item.is_confirmed);
-  els.notesSection.classList.toggle('is-hidden', !slot);
-  if (!slot) return;
+  const slots = confirmedSlots();
+  els.notesSection.classList.toggle('is-hidden', !slots.length);
+  if (!slots.length) return;
+
+  const slot = currentNoteSlot();
+  const picker = ensureNoteSlotPicker();
+  picker.innerHTML = `<label>メモ対象の確定日
+    <select id="noteSlotPicker">
+      ${slots.map((item) => `<option value="${item.id}" ${item.id === slot.id ? 'selected' : ''}>${jpDate(item.date)} ${hm(item.start_time)}〜${hm(item.end_time)} / ${esc(item.task_title || '作業')}</option>`).join('')}
+    </select>
+  </label>`;
+  $('noteSlotPicker')?.addEventListener('change', (event) => {
+    state.noteSlotId = event.target.value;
+    renderNotes();
+  });
 
   const note = state.notes.find((item) => item.time_slot_id === slot.id);
   els.notesForm.todo.value = note?.todo || '';
@@ -800,7 +879,7 @@ function renderNotes() {
 async function saveNotes(event) {
   event.preventDefault();
 
-  const slot = state.slots.find((item) => item.is_confirmed);
+  const slot = currentNoteSlot();
   if (!slot) return showToast('先に日時を確定してください', 'error');
 
   setLoading(true);

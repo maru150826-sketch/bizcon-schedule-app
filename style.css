@@ -439,3 +439,30 @@ tr:last-child td { border-bottom: 0; }
     width: 100%;
   }
 }
+
+/* v8 additions */
+.confirmed-list {
+  display: grid;
+  gap: 12px;
+}
+
+.confirmed-item {
+  margin: 0;
+}
+
+.confirmed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.note-picker-box {
+  margin-bottom: 14px;
+}
+
+@media (max-width: 720px) {
+  .confirmed-actions {
+    display: grid;
+  }
+}

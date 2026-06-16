@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SAMPO QUEST 予定調整</title>
-  <link rel="stylesheet" href="./style.css?v=13" />
+  <link rel="stylesheet" href="./style.css?v=14" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
@@ -40,7 +40,7 @@
           <li>候補日に対して ○ / △ / × を押すだけで回答完了</li>
           <li>○+△が多く、×が少ない日程を確定する</li>
         </ol>
-        <p>回答状況は30秒ごとに自動更新されます。手動更新もできます。</p>
+        <p>回答状況は120秒ごとに自動更新されます。手動更新もできます。投票は押した瞬間に画面へ反映されます。</p>
       </div>
     </section>
 
@@ -83,7 +83,7 @@
         <span class="step">3</span>
         <div>
           <h2>確定した作業予定</h2>
-          <p>確定した日程の場所・作業内容・参加者を表示します。</p>
+          <p>確定した日程の場所・作業内容・参加者を表示します。確定済みの日程は「確定を外す」で戻せます。</p>
         </div>
       </div>
       <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
@@ -94,7 +94,7 @@
         <span class="step">4</span>
         <div>
           <h2>候補日を追加</h2>
-          <p>日付、30分刻みの開始/終了時間、作業内容、場所だけで追加できます。</p>
+          <p>日付、30分刻みの開始/終了時間、作業内容、場所だけで追加できます。日付は固定ではなく毎回選択します。</p>
         </div>
       </div>
 
@@ -138,7 +138,7 @@
             <span id="selectedLocationText" class="selected-text">未選択</span>
           </div>
           <div class="quick-grid two-grid" id="locationPresetList">
-            <button type="button" class="chip location-chip" data-location="Zoom">Zoom</button>
+            <button type="button" class="chip location-chip" data-location="オンライン">オンライン</button>
             <button type="button" class="chip location-chip" data-location="大学">大学</button>
           </div>
           <input id="slotLocation" name="location" type="hidden" required />
@@ -205,6 +205,6 @@
   <footer class="footer">GitHub Pages + Supabase / 固定チーム専用</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=13"></script>
+  <script src="./app.js?v=14"></script>
 </body>
 </html>
