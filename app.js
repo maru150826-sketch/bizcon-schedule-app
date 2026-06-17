@@ -21,6 +21,8 @@ const state = {
   members: [],
   availability: [],
   confirmed: [],
+  responses: [],
+  notes: [],
   currentMemberId: localStorage.getItem('sq_current_member_id') || '',
   weekStart: localStorage.getItem('sq_week_start') || startOfWeekISO(new Date()),
   editingAvailabilityId: '',
@@ -37,10 +39,6 @@ function toast(message) {
 function fail(error, fallback = 'エラーが発生しました') {
   console.error(error);
   toast(error?.message || fallback);
-}
-function normalizeLocation(location) {
-  if (location === 'Zoom') return 'オンライン';
-  return location || '未設定';
 }
 function memberName(id) {
   return state.members.find((m) => m.id === id)?.name || '不明';
@@ -70,7 +68,7 @@ function dateToISO(date) {
 function startOfWeekISO(value) {
   const d = toLocalDate(value);
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday start
+  const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
   return dateToISO(d);
 }
@@ -127,7 +125,6 @@ function bindEvents() {
   $('nextWeekButton').addEventListener('click', () => shiftWeek(7));
   $('thisWeekButton').addEventListener('click', () => setWeek(startOfWeekISO(new Date())));
   $('weekPicker').addEventListener('change', (event) => setWeek(startOfWeekISO(event.target.value)));
-
 }
 
 async function init() {
@@ -149,7 +146,7 @@ async function loadAll({ silent }) {
   if (!silent) showLoading(true);
   try {
     await ensureGroup();
-    await Promise.all([loadMembers(), loadAvailability(), loadConfirmed()]);
+    await Promise.all([loadMembers(), loadAvailability(), loadConfirmed(), loadResponses(), loadNotes()]);
     render();
   } catch (error) {
     fail(error, '読み込みに失敗しました');
@@ -214,6 +211,24 @@ async function loadConfirmed() {
     .order('start_time', { ascending: true });
   if (error) throw error;
   state.confirmed = data || [];
+}
+
+async function loadResponses() {
+  const { data, error } = await client
+    .from('responses')
+    .select('*')
+    .eq('group_id', state.group.id);
+  if (error) throw error;
+  state.responses = data || [];
+}
+
+async function loadNotes() {
+  const { data, error } = await client
+    .from('meeting_notes')
+    .select('*')
+    .eq('group_id', state.group.id);
+  if (error) throw error;
+  state.notes = data || [];
 }
 
 function setWeek(weekStart) {
@@ -287,12 +302,8 @@ async function handleAvailabilitySubmit(event) {
     location: 'どちらでも',
     memo: String(form.get('memo') || '').trim()
   };
-  if (!payload.date || !payload.start_time || !payload.end_time) {
-    return toast('日付・時間を選んでください');
-  }
-  if (minutes(payload.end_time) <= minutes(payload.start_time)) {
-    return toast('終了時間は開始時間より後にしてください');
-  }
+  if (!payload.date || !payload.start_time || !payload.end_time) return toast('日付・時間を選んでください');
+  if (minutes(payload.end_time) <= minutes(payload.start_time)) return toast('終了時間は開始時間より後にしてください');
 
   try {
     if (state.editingAvailabilityId) {
@@ -330,7 +341,6 @@ function editAvailability(id) {
   $('cancelEditAvailability').classList.remove('is-hidden');
   $('availabilitySection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-
 function cancelEditAvailability() { resetAvailabilityForm(); }
 function resetAvailabilityForm() {
   state.editingAvailabilityId = '';
@@ -340,19 +350,13 @@ function resetAvailabilityForm() {
   $('availabilitySubmit').textContent = '空き時間を追加';
   $('cancelEditAvailability').classList.add('is-hidden');
 }
-
-
 async function deleteAvailability(id) {
   const item = state.availability.find((a) => a.id === id);
   if (!item) return;
   if (item.member_id !== state.currentMemberId) return toast('削除するには、その回答者を選んでください');
   if (!confirm(`${formatRange(item)} の空き時間を削除しますか？`)) return;
   try {
-    const { error } = await client
-      .from('availability_slots')
-      .delete()
-      .eq('id', id)
-      .eq('member_id', state.currentMemberId);
+    const { error } = await client.from('availability_slots').delete().eq('id', id).eq('member_id', state.currentMemberId);
     if (error) throw error;
     await loadAll({ silent: true });
     toast('空き時間を削除しました');
@@ -368,35 +372,25 @@ function slotOverlap(slot, date, start, end) {
   if (overlapEnd - overlapStart < 30) return null;
   return { start: overlapStart, end: overlapEnd, duration: overlapEnd - overlapStart, memo: slot.memo || '' };
 }
-
 function memberCoverage(memberId, date, start, end) {
   const slots = state.availability.filter((slot) => slot.member_id === memberId);
   const overlaps = slots.map((slot) => slotOverlap(slot, date, start, end)).filter(Boolean);
   if (!overlaps.length) return { status: 'none', overlaps: [] };
-
   const fullyCovered = overlaps.some((overlap) => overlap.start <= start && overlap.end >= end);
   if (fullyCovered) return { status: 'full', overlaps };
-
   overlaps.sort((a, b) => a.start - b.start);
   return { status: 'partial', overlaps };
 }
-
 function collectCoverage(date, start, end) {
   const fullIds = [];
   const partial = [];
   const missingIds = [];
-
   for (const m of state.members) {
     const coverage = memberCoverage(m.id, date, start, end);
-    if (coverage.status === 'full') {
-      fullIds.push(m.id);
-    } else if (coverage.status === 'partial') {
-      partial.push({ memberId: m.id, overlaps: coverage.overlaps });
-    } else {
-      missingIds.push(m.id);
-    }
+    if (coverage.status === 'full') fullIds.push(m.id);
+    else if (coverage.status === 'partial') partial.push({ memberId: m.id, overlaps: coverage.overlaps });
+    else missingIds.push(m.id);
   }
-
   return { fullIds, partial, partialIds: partial.map((p) => p.memberId), missingIds };
 }
 
@@ -409,7 +403,6 @@ function buildSuggestions() {
   for (const date of dates) {
     const daySlots = weekAvailability.filter((a) => a.date === date);
     if (!daySlots.length) continue;
-
     const minStart = Math.min(...daySlots.map((a) => minutes(a.start_time)));
     const maxEnd = Math.max(...daySlots.map((a) => minutes(a.end_time)));
     let blockStart = null;
@@ -421,7 +414,6 @@ function buildSuggestions() {
       const coverage = collectCoverage(date, start, end);
       const meaningful = coverage.fullIds.length + coverage.partialIds.length >= Math.min(2, state.members.length);
       const key = meaningful ? `${coverage.fullIds.sort().join(',')}|${coverage.partialIds.sort().join(',')}|${coverage.missingIds.sort().join(',')}` : '';
-
       if (key !== currentKey) {
         pushSuggestionBlock(rawBlocks, date, blockStart, start, currentCoverage, minDuration);
         blockStart = key ? start : null;
@@ -436,19 +428,15 @@ function buildSuggestions() {
   mergedByTime.sort(sortSuggestions);
   return curateSuggestions(mergedByTime);
 }
-
 function pushSuggestionBlock(list, date, start, end, coverage, minDuration) {
   if (start === null || !coverage) return;
   const duration = end - start;
   if (duration < minDuration) return;
-
-  // ブロックが長すぎる場合は、表示しやすい長さに自動で切る
   const preferredEnd = start + Math.max(minDuration, Math.min(duration, 180));
   const finalEnd = Math.min(end, preferredEnd);
   const finalCoverage = collectCoverage(date, start, finalEnd);
   const totalPossible = finalCoverage.fullIds.length + finalCoverage.partialIds.length;
   if (!totalPossible) return;
-
   list.push({
     date,
     start_time: timeFromMinutes(start),
@@ -461,34 +449,14 @@ function pushSuggestionBlock(list, date, start, end, coverage, minDuration) {
     score: finalCoverage.fullIds.length * 10000 + finalCoverage.partialIds.length * 3500 - finalCoverage.missingIds.length * 1000 + (finalEnd - start)
   });
 }
-
 function mergeSameDateTimeSuggestions(blocks) {
   const byKey = new Map();
   for (const item of blocks) {
     const key = `${item.date}-${item.start_time}-${item.end_time}`;
-    if (!byKey.has(key) || item.score > byKey.get(key).score) {
-      byKey.set(key, { ...item });
-    }
+    if (!byKey.has(key) || item.score > byKey.get(key).score) byKey.set(key, { ...item });
   }
   return [...byKey.values()];
 }
-
-function sameIdSet(a, b) {
-  const aa = [...a].sort().join(',');
-  const bb = [...b].sort().join(',');
-  return aa === bb;
-}
-
-function summarizeSuggestionLocation(item) {
-  return {
-    location: item.location,
-    fullCount: item.fullIds.length,
-    partialCount: item.partialIds.length,
-    missingCount: item.missingIds.length,
-    score: item.score
-  };
-}
-
 function sortSuggestions(a, b) {
   const aPossible = a.fullIds.length + a.partialIds.length;
   const bPossible = b.fullIds.length + b.partialIds.length;
@@ -498,21 +466,17 @@ function sortSuggestions(a, b) {
   if (b.duration !== a.duration) return b.duration - a.duration;
   return `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`);
 }
-
 function curateSuggestions(suggestions) {
   const selected = [];
   const perDateCount = new Map();
-
   for (const item of suggestions) {
     const dateCount = perDateCount.get(item.date) || 0;
     if (dateCount >= SUGGESTION_PER_DATE_LIMIT) continue;
     if (selected.some((chosen) => isSimilarSuggestion(chosen, item))) continue;
-
     selected.push(item);
     perDateCount.set(item.date, dateCount + 1);
     if (selected.length >= SUGGESTION_LIMIT) break;
   }
-
   if (selected.length < Math.min(SUGGESTION_LIMIT, suggestions.length)) {
     for (const item of suggestions) {
       if (selected.includes(item)) continue;
@@ -521,10 +485,8 @@ function curateSuggestions(suggestions) {
       if (selected.length >= SUGGESTION_LIMIT) break;
     }
   }
-
   return selected.sort(sortByDateTime);
 }
-
 function isSimilarSuggestion(a, b) {
   if (a.date !== b.date) return false;
   const overlap = Math.min(minutes(a.end_time), minutes(b.end_time)) - Math.max(minutes(a.start_time), minutes(b.start_time));
@@ -535,20 +497,142 @@ function isSimilarSuggestion(a, b) {
   const smaller = Math.min(aIds.length, bIds.length);
   return smaller > 0 && shared / smaller >= 0.8;
 }
-
 function isNearDuplicateSuggestion(a, b) {
   if (a.date !== b.date) return false;
   const overlap = Math.min(minutes(a.end_time), minutes(b.end_time)) - Math.max(minutes(a.start_time), minutes(b.start_time));
   return overlap >= Math.min(a.duration, b.duration) * 0.75;
 }
-
 function formatPartial(partial) {
   return partial.map((p) => {
-    const ranges = p.overlaps
-      .map((o) => `${timeFromMinutes(o.start)}〜${timeFromMinutes(o.end)}`)
-      .join(' / ');
+    const ranges = p.overlaps.map((o) => `${timeFromMinutes(o.start)}〜${timeFromMinutes(o.end)}`).join(' / ');
     return `${memberName(p.memberId)}（${ranges}）`;
   }).join('、');
+}
+
+async function confirmSuggestion(index) {
+  const suggestions = buildSuggestions();
+  const suggestion = suggestions[index];
+  if (!suggestion) return toast('提案が見つかりません。再読み込みしてください');
+  const exists = state.confirmed.some((slot) => slot.date === suggestion.date && String(slot.start_time).slice(0,5) === suggestion.start_time && String(slot.end_time).slice(0,5) === suggestion.end_time);
+  if (exists) return toast('この日時はすでに確定済みです');
+  try {
+    const { error } = await client.from('time_slots').insert({
+      group_id: state.group.id,
+      date: suggestion.date,
+      start_time: suggestion.start_time,
+      end_time: suggestion.end_time,
+      task_title: '作業会',
+      location: null,
+      memo: '',
+      is_confirmed: true,
+      created_by_member_id: state.currentMemberId || null
+    });
+    if (error) throw error;
+    await loadAll({ silent: true });
+    toast('日時を確定しました');
+    $('confirmedSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (error) {
+    fail(error, '確定に失敗しました');
+  }
+}
+async function unconfirmSlot(id) {
+  if (!confirm('この確定を外しますか？')) return;
+  try {
+    const { error } = await client.from('time_slots').update({ is_confirmed: false }).eq('id', id);
+    if (error) throw error;
+    await loadAll({ silent: true });
+    toast('確定を外しました');
+  } catch (error) {
+    fail(error, '確定解除に失敗しました');
+  }
+}
+
+function responseFor(memberId, slotId) {
+  return state.responses.find((r) => r.member_id === memberId && r.time_slot_id === slotId) || null;
+}
+function noteFor(slotId) {
+  return state.notes.find((n) => n.time_slot_id === slotId) || null;
+}
+function confirmedStatus(memberId, slot) {
+  const response = responseFor(memberId, slot.id);
+  if (response?.status === 'available') return { label: '参加', cls: 'good', detail: response.comment || '確定後に参加回答' };
+  if (response?.status === 'maybe') return { label: '一部/要相談', cls: 'maybe', detail: response.comment || '確定後に条件付き回答' };
+  if (response?.status === 'unavailable') return { label: '不参加', cls: 'bad', detail: response.comment || '確定後に不参加回答' };
+
+  const coverage = memberCoverage(memberId, slot.date, minutes(slot.start_time), minutes(slot.end_time));
+  if (coverage.status === 'full') return { label: '参加予定', cls: 'good', detail: '空き時間から自動判定' };
+  if (coverage.status === 'partial') {
+    const ranges = coverage.overlaps.map((o) => `${timeFromMinutes(o.start)}〜${timeFromMinutes(o.end)}`).join(' / ');
+    return { label: '一部参加', cls: 'maybe', detail: ranges };
+  }
+  return { label: '未回答', cls: 'neutral', detail: '空き時間未入力' };
+}
+function confirmedStatusSummary(slot) {
+  const counts = { good: 0, maybe: 0, bad: 0, neutral: 0 };
+  for (const m of state.members) {
+    const status = confirmedStatus(m.id, slot);
+    if (status.cls === 'good') counts.good += 1;
+    else if (status.cls === 'maybe') counts.maybe += 1;
+    else if (status.cls === 'bad') counts.bad += 1;
+    else counts.neutral += 1;
+  }
+  return counts;
+}
+async function setConfirmedResponse(slotId, status) {
+  const m = currentMember();
+  if (!m) return toast('先に自分の名前を選んでください');
+  try {
+    const { error } = await client
+      .from('responses')
+      .upsert({
+        group_id: state.group.id,
+        member_id: m.id,
+        time_slot_id: slotId,
+        status,
+        comment: '',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'member_id,time_slot_id' });
+    if (error) throw error;
+    await loadAll({ silent: true });
+    toast('参加可否を保存しました');
+  } catch (error) {
+    fail(error, '参加可否の保存に失敗しました');
+  }
+}
+async function clearConfirmedResponse(slotId) {
+  const m = currentMember();
+  if (!m) return toast('先に自分の名前を選んでください');
+  try {
+    const { error } = await client
+      .from('responses')
+      .delete()
+      .eq('member_id', m.id)
+      .eq('time_slot_id', slotId);
+    if (error) throw error;
+    await loadAll({ silent: true });
+    toast('追加回答を未回答に戻しました');
+  } catch (error) {
+    fail(error, '回答の削除に失敗しました');
+  }
+}
+async function saveConfirmedMemo(slotId) {
+  const textarea = document.querySelector(`[data-note-slot="${slotId}"]`);
+  if (!textarea) return;
+  try {
+    const { error } = await client
+      .from('meeting_notes')
+      .upsert({
+        group_id: state.group.id,
+        time_slot_id: slotId,
+        memo: textarea.value.trim(),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'time_slot_id' });
+    if (error) throw error;
+    await loadNotes();
+    toast('メモを保存しました');
+  } catch (error) {
+    fail(error, 'メモの保存に失敗しました');
+  }
 }
 
 function render() {
@@ -562,18 +646,15 @@ function render() {
   renderSuggestions();
   renderAvailabilityList();
 }
-
 function renderGroup() {
   $('groupName').textContent = state.group?.name || 'SAMPO QUEST ビジコンチーム';
   $('groupDescription').textContent = state.group?.description || '';
 }
-
 function renderWeekControl() {
   $('weekRangeText').textContent = formatWeekRange();
   $('weekPicker').value = state.weekStart;
   $('weekHintText').textContent = `今は ${formatWeekRange()} の空き時間・提案だけを表示しています。別週は左右のボタンで切り替えられます。`;
 }
-
 function renderMembers() {
   const box = $('memberList');
   if (!state.members.length) {
@@ -586,13 +667,12 @@ function renderMembers() {
     </button>
   `).join('');
 }
-
 function renderCurrentMember() {
   const box = $('currentMemberBox');
   const m = currentMember();
   if (!m) {
     box.classList.remove('is-hidden');
-    box.innerHTML = '<b>未選択</b><br>先に自分の名前を選んでください。選ぶと空き時間の追加・編集ができます。';
+    box.innerHTML = '<b>未選択</b><br>先に自分の名前を選んでください。選ぶと空き時間の追加・編集、確定日時への参加回答ができます。';
     return;
   }
   box.classList.remove('is-hidden');
@@ -604,7 +684,6 @@ function renderCurrentMember() {
     </div>
   `;
 }
-
 function renderSuggestions() {
   const box = $('suggestionList');
   const weekAvailability = selectedWeekAvailability();
@@ -639,13 +718,13 @@ function renderSuggestions() {
             <span class="badge ${allFull ? 'good' : enough ? 'maybe' : ''}">${label}</span>
             <span class="badge good">フル ${s.fullIds.length}/${state.members.length}</span>
             <span class="badge maybe">一部 ${s.partialIds.length}</span>
-            <span class="badge bad">不可 ${s.missingIds.length}</span>
+            <span class="badge bad">未入力 ${s.missingIds.length}</span>
           </div>
         </div>
         <div class="people-box">
           <div><b>フル参加：</b>${s.fullIds.map(memberName).join('、') || 'なし'}</div>
           <div><b>一部参加：</b>${formatPartial(s.partial) || 'なし'}</div>
-          <div><b>この時間は厳しい人：</b>${s.missingIds.map(memberName).join('、') || 'なし'}</div>
+          <div><b>この時間の入力なし：</b>${s.missingIds.map(memberName).join('、') || 'なし'}</div>
         </div>
         <div class="action-row">
           <button type="button" class="primary" onclick="confirmSuggestion(${index})">この時間で確定</button>
@@ -654,7 +733,6 @@ function renderSuggestions() {
     `;
   }).join('');
 }
-
 function renderConfirmed() {
   const box = $('confirmedBox');
   const confirmed = selectedWeekConfirmed().sort(sortByDateTime);
@@ -664,23 +742,55 @@ function renderConfirmed() {
     return;
   }
   box.className = 'candidate-list';
-  box.innerHTML = confirmed.map((slot) => `
-    <article class="confirmed-card">
-      <div class="card-top">
-        <div>
-          <h3 class="date-title">${formatRange(slot)}</h3>
-          <div class="meta-line">作業内容：${escapeHtml(slot.task_title || '作業会')}</div>
-          ${slot.memo ? `<div class="meta-line">${escapeHtml(slot.memo)}</div>` : ''}
+  box.innerHTML = confirmed.map((slot) => {
+    const note = noteFor(slot.id);
+    const counts = confirmedStatusSummary(slot);
+    return `
+      <article class="confirmed-card">
+        <div class="card-top">
+          <div>
+            <h3 class="date-title">${formatRange(slot)}</h3>
+            <div class="meta-line">作業内容：${escapeHtml(slot.task_title || '作業会')}</div>
+            ${slot.memo ? `<div class="meta-line">${escapeHtml(slot.memo)}</div>` : ''}
+          </div>
+          <div class="badge-row">
+            <span class="badge good">確定済み</span>
+            <span class="badge good">参加 ${counts.good}</span>
+            <span class="badge maybe">一部 ${counts.maybe}</span>
+            <span class="badge bad">不参加 ${counts.bad}</span>
+            <span class="badge">未回答 ${counts.neutral}</span>
+          </div>
         </div>
-        <span class="badge good">確定済み</span>
-      </div>
-      <div class="action-row">
-        <button type="button" class="secondary" onclick="unconfirmSlot('${slot.id}')">確定を外す</button>
-      </div>
-    </article>
-  `).join('');
-}
 
+        <div class="confirmed-status-list">
+          ${state.members.map((m) => {
+            const st = confirmedStatus(m.id, slot);
+            return `<div class="status-line"><b>${escapeHtml(m.name)}</b><span class="badge ${st.cls}">${st.label}</span><span class="muted">${escapeHtml(st.detail)}</span></div>`;
+          }).join('')}
+        </div>
+
+        <div class="quick-answer-box">
+          <b>自分の参加可否を追加回答</b>
+          <p class="muted">空き時間を入れていない人も、確定後にここで参加可否を入れられます。</p>
+          <div class="action-row compact-actions">
+            <button type="button" class="primary" onclick="setConfirmedResponse('${slot.id}', 'available')">参加できる</button>
+            <button type="button" class="secondary" onclick="setConfirmedResponse('${slot.id}', 'maybe')">一部・要相談</button>
+            <button type="button" class="danger" onclick="setConfirmedResponse('${slot.id}', 'unavailable')">参加できない</button>
+            <button type="button" class="secondary ghost" onclick="clearConfirmedResponse('${slot.id}')">未回答に戻す</button>
+          </div>
+        </div>
+
+        <label class="confirmed-memo-label">共有メモ
+          <textarea data-note-slot="${slot.id}" rows="4" placeholder="例：この日は応募フォームの文章を固める。持ち物、決定事項、宿題などを自由に追記。">${escapeHtml(note?.memo || '')}</textarea>
+        </label>
+        <div class="action-row">
+          <button type="button" class="primary" onclick="saveConfirmedMemo('${slot.id}')">メモを保存</button>
+          <button type="button" class="secondary" onclick="unconfirmSlot('${slot.id}')">確定を外す</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
 function groupAvailabilityByDate(items) {
   const map = new Map();
   for (const item of items) {
@@ -691,7 +801,6 @@ function groupAvailabilityByDate(items) {
     .map(([date, slots]) => ({ date, slots: mergeDuplicateAvailability(slots).sort(sortByDateTime) }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
-
 function mergeDuplicateAvailability(items) {
   const map = new Map();
   for (const item of items) {
@@ -706,13 +815,11 @@ function mergeDuplicateAvailability(items) {
   }
   return [...map.values()];
 }
-
 function slotLine(item, { includeMemo = true } = {}) {
   const time = `${String(item.start_time).slice(0,5)}〜${String(item.end_time).slice(0,5)}`;
   const memo = includeMemo && item.mergedMemos?.length ? `：${item.mergedMemos.map(escapeHtml).join(' / ')}` : '';
   return `<b>${escapeHtml(memberName(item.member_id))}</b>　${time}${memo}`;
 }
-
 function renderAvailabilityList() {
   const box = $('availabilityList');
   const weekAvailability = selectedWeekAvailability();
@@ -720,7 +827,6 @@ function renderAvailabilityList() {
     box.innerHTML = `<div class="empty">${formatWeekRange()} にはまだ空き時間が入力されていません。</div>`;
     return;
   }
-
   const groups = groupAvailabilityByDate(weekAvailability);
   box.innerHTML = groups.map((group) => {
     const mine = group.slots.filter((a) => a.member_id === state.currentMemberId);
@@ -748,7 +854,6 @@ function renderAvailabilityList() {
     `;
   }).join('');
 }
-
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -764,4 +869,7 @@ window.editAvailability = editAvailability;
 window.deleteAvailability = deleteAvailability;
 window.confirmSuggestion = confirmSuggestion;
 window.unconfirmSlot = unconfirmSlot;
+window.setConfirmedResponse = setConfirmedResponse;
+window.clearConfirmedResponse = clearConfirmedResponse;
+window.saveConfirmedMemo = saveConfirmedMemo;
 window.shiftWeek = shiftWeek;
