@@ -24,7 +24,6 @@ const state = {
   currentMemberId: localStorage.getItem('sq_current_member_id') || '',
   weekStart: localStorage.getItem('sq_week_start') || startOfWeekISO(new Date()),
   editingAvailabilityId: '',
-  selectedLocation: '',
   isLoading: false
 };
 
@@ -129,13 +128,6 @@ function bindEvents() {
   $('thisWeekButton').addEventListener('click', () => setWeek(startOfWeekISO(new Date())));
   $('weekPicker').addEventListener('change', (event) => setWeek(startOfWeekISO(event.target.value)));
 
-  $('locationPresetList').addEventListener('click', (event) => {
-    const button = event.target.closest('[data-location]');
-    if (!button) return;
-    state.selectedLocation = button.dataset.location;
-    $('availableLocation').value = state.selectedLocation;
-    renderLocationChips();
-  });
 }
 
 async function init() {
@@ -292,11 +284,11 @@ async function handleAvailabilitySubmit(event) {
     date: form.get('date'),
     start_time: form.get('start_time'),
     end_time: form.get('end_time'),
-    location: form.get('location'),
+    location: 'どちらでも',
     memo: String(form.get('memo') || '').trim()
   };
-  if (!payload.date || !payload.start_time || !payload.end_time || !payload.location) {
-    return toast('日付・時間・場所を選んでください');
+  if (!payload.date || !payload.start_time || !payload.end_time) {
+    return toast('日付・時間を選んでください');
   }
   if (minutes(payload.end_time) <= minutes(payload.start_time)) {
     return toast('終了時間は開始時間より後にしてください');
@@ -333,12 +325,9 @@ function editAvailability(id) {
   $('availableDate').value = item.date;
   $('availableStart').value = String(item.start_time).slice(0,5);
   $('availableEnd').value = String(item.end_time).slice(0,5);
-  state.selectedLocation = normalizeLocation(item.location);
-  $('availableLocation').value = state.selectedLocation;
   $('availableMemo').value = item.memo || '';
   $('availabilitySubmit').textContent = '編集内容を保存';
   $('cancelEditAvailability').classList.remove('is-hidden');
-  renderLocationChips();
   $('availabilitySection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -348,12 +337,10 @@ function resetAvailabilityForm() {
   $('availabilityForm').reset();
   $('availableStart').value = '18:00';
   $('availableEnd').value = '21:00';
-  state.selectedLocation = '';
-  $('availableLocation').value = '';
   $('availabilitySubmit').textContent = '空き時間を追加';
   $('cancelEditAvailability').classList.add('is-hidden');
-  renderLocationChips();
 }
+
 
 async function deleteAvailability(id) {
   const item = state.availability.find((a) => a.id === id);
@@ -374,23 +361,17 @@ async function deleteAvailability(id) {
   }
 }
 
-function locationMatches(slotLocation, targetLocation) {
-  const normalized = normalizeLocation(slotLocation);
-  return normalized === 'どちらでも' || targetLocation === 'どちらでも' || normalized === targetLocation;
-}
-
-function slotOverlap(slot, date, start, end, location) {
+function slotOverlap(slot, date, start, end) {
   if (slot.date !== date) return null;
-  if (!locationMatches(slot.location, location)) return null;
   const overlapStart = Math.max(minutes(slot.start_time), start);
   const overlapEnd = Math.min(minutes(slot.end_time), end);
   if (overlapEnd - overlapStart < 30) return null;
-  return { start: overlapStart, end: overlapEnd, duration: overlapEnd - overlapStart, location: normalizeLocation(slot.location), memo: slot.memo || '' };
+  return { start: overlapStart, end: overlapEnd, duration: overlapEnd - overlapStart, memo: slot.memo || '' };
 }
 
-function memberCoverage(memberId, date, start, end, location) {
+function memberCoverage(memberId, date, start, end) {
   const slots = state.availability.filter((slot) => slot.member_id === memberId);
-  const overlaps = slots.map((slot) => slotOverlap(slot, date, start, end, location)).filter(Boolean);
+  const overlaps = slots.map((slot) => slotOverlap(slot, date, start, end)).filter(Boolean);
   if (!overlaps.length) return { status: 'none', overlaps: [] };
 
   const fullyCovered = overlaps.some((overlap) => overlap.start <= start && overlap.end >= end);
@@ -400,13 +381,13 @@ function memberCoverage(memberId, date, start, end, location) {
   return { status: 'partial', overlaps };
 }
 
-function collectCoverage(date, start, end, location) {
+function collectCoverage(date, start, end) {
   const fullIds = [];
   const partial = [];
   const missingIds = [];
 
   for (const m of state.members) {
-    const coverage = memberCoverage(m.id, date, start, end, location);
+    const coverage = memberCoverage(m.id, date, start, end);
     if (coverage.status === 'full') {
       fullIds.push(m.id);
     } else if (coverage.status === 'partial') {
@@ -423,7 +404,6 @@ function buildSuggestions() {
   const minDuration = Number($('minDurationSelect')?.value || 90);
   const weekAvailability = selectedWeekAvailability();
   const dates = [...new Set(weekAvailability.map((a) => a.date))].sort();
-  const locations = ['オンライン', '大学'];
   const rawBlocks = [];
 
   for (const date of dates) {
@@ -432,27 +412,24 @@ function buildSuggestions() {
 
     const minStart = Math.min(...daySlots.map((a) => minutes(a.start_time)));
     const maxEnd = Math.max(...daySlots.map((a) => minutes(a.end_time)));
+    let blockStart = null;
+    let currentKey = '';
+    let currentCoverage = null;
 
-    for (const location of locations) {
-      let blockStart = null;
-      let currentKey = '';
-      let currentCoverage = null;
+    for (let start = minStart; start + 30 <= maxEnd; start += 30) {
+      const end = start + 30;
+      const coverage = collectCoverage(date, start, end);
+      const meaningful = coverage.fullIds.length + coverage.partialIds.length >= Math.min(2, state.members.length);
+      const key = meaningful ? `${coverage.fullIds.sort().join(',')}|${coverage.partialIds.sort().join(',')}|${coverage.missingIds.sort().join(',')}` : '';
 
-      for (let start = minStart; start + 30 <= maxEnd; start += 30) {
-        const end = start + 30;
-        const coverage = collectCoverage(date, start, end, location);
-        const meaningful = coverage.fullIds.length + coverage.partialIds.length >= Math.min(2, state.members.length);
-        const key = meaningful ? `${coverage.fullIds.sort().join(',')}|${coverage.partialIds.sort().join(',')}|${coverage.missingIds.sort().join(',')}` : '';
-
-        if (key !== currentKey) {
-          pushSuggestionBlock(rawBlocks, date, blockStart, start, location, currentCoverage, minDuration);
-          blockStart = key ? start : null;
-          currentKey = key;
-          currentCoverage = key ? coverage : null;
-        }
+      if (key !== currentKey) {
+        pushSuggestionBlock(rawBlocks, date, blockStart, start, currentCoverage, minDuration);
+        blockStart = key ? start : null;
+        currentKey = key;
+        currentCoverage = key ? coverage : null;
       }
-      pushSuggestionBlock(rawBlocks, date, blockStart, maxEnd, location, currentCoverage, minDuration);
     }
+    pushSuggestionBlock(rawBlocks, date, blockStart, maxEnd, currentCoverage, minDuration);
   }
 
   const mergedByTime = mergeSameDateTimeSuggestions(rawBlocks);
@@ -460,7 +437,7 @@ function buildSuggestions() {
   return curateSuggestions(mergedByTime);
 }
 
-function pushSuggestionBlock(list, date, start, end, location, coverage, minDuration) {
+function pushSuggestionBlock(list, date, start, end, coverage, minDuration) {
   if (start === null || !coverage) return;
   const duration = end - start;
   if (duration < minDuration) return;
@@ -468,7 +445,7 @@ function pushSuggestionBlock(list, date, start, end, location, coverage, minDura
   // ブロックが長すぎる場合は、表示しやすい長さに自動で切る
   const preferredEnd = start + Math.max(minDuration, Math.min(duration, 180));
   const finalEnd = Math.min(end, preferredEnd);
-  const finalCoverage = collectCoverage(date, start, finalEnd, location);
+  const finalCoverage = collectCoverage(date, start, finalEnd);
   const totalPossible = finalCoverage.fullIds.length + finalCoverage.partialIds.length;
   if (!totalPossible) return;
 
@@ -476,8 +453,6 @@ function pushSuggestionBlock(list, date, start, end, location, coverage, minDura
     date,
     start_time: timeFromMinutes(start),
     end_time: timeFromMinutes(finalEnd),
-    location,
-    locations: [location],
     fullIds: [...finalCoverage.fullIds],
     partial: [...finalCoverage.partial],
     partialIds: [...finalCoverage.partialIds],
@@ -491,21 +466,8 @@ function mergeSameDateTimeSuggestions(blocks) {
   const byKey = new Map();
   for (const item of blocks) {
     const key = `${item.date}-${item.start_time}-${item.end_time}`;
-    const summary = summarizeSuggestionLocation(item);
-    if (!byKey.has(key)) {
-      byKey.set(key, { ...item, locationOptions: [summary] });
-      continue;
-    }
-    const existing = byKey.get(key);
-    existing.locationOptions.push(summary);
-
-    const itemBetter = item.score > existing.score;
-    const itemSamePeople = sameIdSet(item.fullIds, existing.fullIds) && sameIdSet(item.partialIds, existing.partialIds) && sameIdSet(item.missingIds, existing.missingIds);
-    if (itemBetter) {
-      Object.assign(existing, { ...item, locationOptions: existing.locationOptions });
-    } else if (itemSamePeople) {
-      existing.locations = [...new Set([...(existing.locations || [existing.location]), item.location])];
-      existing.location = existing.locations.length >= 2 ? 'どちらでも' : existing.location;
+    if (!byKey.has(key) || item.score > byKey.get(key).score) {
+      byKey.set(key, { ...item });
     }
   }
   return [...byKey.values()];
@@ -580,19 +542,6 @@ function isNearDuplicateSuggestion(a, b) {
   return overlap >= Math.min(a.duration, b.duration) * 0.75;
 }
 
-function getLocationAdvice(date, start, end) {
-  const targets = ['オンライン', '大学'];
-  return targets.map((location) => {
-    const coverage = collectCoverage(date, start, end, location);
-    return { location, ...coverage };
-  }).sort((a, b) => {
-    const bp = b.fullIds.length + b.partialIds.length;
-    const ap = a.fullIds.length + a.partialIds.length;
-    if (b.fullIds.length !== a.fullIds.length) return b.fullIds.length - a.fullIds.length;
-    return bp - ap;
-  });
-}
-
 function formatPartial(partial) {
   return partial.map((p) => {
     const ranges = p.overlaps
@@ -602,78 +551,16 @@ function formatPartial(partial) {
   }).join('、');
 }
 
-function locationOptionsText(options = []) {
-  if (!options.length) return '';
-  const unique = [];
-  for (const option of options) {
-    if (!unique.some((x) => x.location === option.location)) unique.push(option);
-  }
-  return unique
-    .sort((a, b) => b.score - a.score)
-    .map((o) => `${o.location}: フル${o.fullCount}・一部${o.partialCount}`)
-    .join(' / ');
-}
-
-async function confirmSuggestion(index) {
-  const suggestion = buildSuggestions()[index];
-  if (!suggestion) return;
-  const m = currentMember();
-  if (!m) return toast('先に自分の名前を選んでください');
-
-  const exists = state.confirmed.some((slot) =>
-    slot.date === suggestion.date &&
-    String(slot.start_time).slice(0,5) === suggestion.start_time &&
-    String(slot.end_time).slice(0,5) === suggestion.end_time &&
-    normalizeLocation(slot.location) === suggestion.location
-  );
-  if (exists) return toast('この日程はすでに確定済みです');
-
-  const fullNames = suggestion.fullIds.map(memberName).join('、') || 'なし';
-  const partialNames = formatPartial(suggestion.partial) || 'なし';
-  try {
-    const { error } = await client.from('time_slots').insert({
-      group_id: state.group.id,
-      date: suggestion.date,
-      start_time: suggestion.start_time,
-      end_time: suggestion.end_time,
-      task_title: '作業会',
-      location: suggestion.location,
-      memo: `空き時間から自動提案。フル参加：${fullNames} / 一部参加：${partialNames}`,
-      is_confirmed: true,
-      created_by_member_id: m.id
-    });
-    if (error) throw error;
-    await loadAll({ silent: true });
-    toast('日程を確定しました');
-  } catch (error) {
-    fail(error, '確定に失敗しました');
-  }
-}
-
-async function unconfirmSlot(id) {
-  if (!confirm('この日程の確定を外しますか？')) return;
-  try {
-    const { error } = await client.from('time_slots').update({ is_confirmed: false }).eq('id', id);
-    if (error) throw error;
-    await loadAll({ silent: true });
-    toast('確定を外しました');
-  } catch (error) {
-    fail(error, '確定解除に失敗しました');
-  }
-}
-
 function render() {
-  ['groupSection','weekSection','confirmedSection','memberSection','availabilitySection','suggestionSection','availabilityListSection','matrixSection']
+  ['groupSection','confirmedSection','memberSection','weekSection','availabilitySection','suggestionSection','availabilityListSection']
     .forEach((id) => $(id).classList.remove('is-hidden'));
   renderGroup();
   renderWeekControl();
   renderConfirmed();
   renderMembers();
   renderCurrentMember();
-  renderLocationChips();
   renderSuggestions();
   renderAvailabilityList();
-  renderMatrix();
 }
 
 function renderGroup() {
@@ -718,13 +605,6 @@ function renderCurrentMember() {
   `;
 }
 
-function renderLocationChips() {
-  document.querySelectorAll('.location-chip').forEach((button) => {
-    button.classList.toggle('is-selected', button.dataset.location === state.selectedLocation);
-  });
-  $('selectedLocationText').textContent = state.selectedLocation || '未選択';
-}
-
 function renderSuggestions() {
   const box = $('suggestionList');
   const weekAvailability = selectedWeekAvailability();
@@ -753,7 +633,7 @@ function renderSuggestions() {
         <div class="card-top">
           <div>
             <h3 class="date-title">${formatDate(s.date)} ${s.start_time}〜${s.end_time}</h3>
-            <div class="meta-line">場所：${escapeHtml(s.location)} / ${s.duration}分</div>
+            <div class="meta-line">${s.duration}分</div>
           </div>
           <div class="badge-row">
             <span class="badge ${allFull ? 'good' : enough ? 'maybe' : ''}">${label}</span>
@@ -789,7 +669,7 @@ function renderConfirmed() {
       <div class="card-top">
         <div>
           <h3 class="date-title">${formatRange(slot)}</h3>
-          <div class="meta-line">場所：${escapeHtml(normalizeLocation(slot.location))} / 作業内容：${escapeHtml(slot.task_title || '作業会')}</div>
+          <div class="meta-line">作業内容：${escapeHtml(slot.task_title || '作業会')}</div>
           ${slot.memo ? `<div class="meta-line">${escapeHtml(slot.memo)}</div>` : ''}
         </div>
         <span class="badge good">確定済み</span>
@@ -799,12 +679,6 @@ function renderConfirmed() {
       </div>
     </article>
   `).join('');
-}
-
-function peopleWhoCanUseLocation(slots, location) {
-  return [...new Set(slots
-    .filter((slot) => locationMatches(slot.location, location))
-    .map((slot) => slot.member_id))];
 }
 
 function groupAvailabilityByDate(items) {
@@ -821,7 +695,7 @@ function groupAvailabilityByDate(items) {
 function mergeDuplicateAvailability(items) {
   const map = new Map();
   for (const item of items) {
-    const key = `${item.member_id}-${item.date}-${String(item.start_time).slice(0,5)}-${String(item.end_time).slice(0,5)}-${normalizeLocation(item.location)}`;
+    const key = `${item.member_id}-${item.date}-${String(item.start_time).slice(0,5)}-${String(item.end_time).slice(0,5)}`;
     if (!map.has(key)) {
       map.set(key, { ...item, mergedIds: [item.id], mergedMemos: item.memo ? [item.memo] : [] });
       continue;
@@ -833,11 +707,10 @@ function mergeDuplicateAvailability(items) {
   return [...map.values()];
 }
 
-function slotLine(item, { includeLocation = true, includeMemo = true } = {}) {
+function slotLine(item, { includeMemo = true } = {}) {
   const time = `${String(item.start_time).slice(0,5)}〜${String(item.end_time).slice(0,5)}`;
-  const location = includeLocation ? `（${normalizeLocation(item.location)}）` : '';
   const memo = includeMemo && item.mergedMemos?.length ? `：${item.mergedMemos.map(escapeHtml).join(' / ')}` : '';
-  return `<b>${escapeHtml(memberName(item.member_id))}</b> ${time}${escapeHtml(location)}${memo}`;
+  return `<b>${escapeHtml(memberName(item.member_id))}</b>　${time}${memo}`;
 }
 
 function renderAvailabilityList() {
@@ -856,7 +729,7 @@ function renderAvailabilityList() {
         <div class="card-top">
           <div>
             <h3 class="date-title">${formatDate(group.date)}</h3>
-            <div class="meta-line">${group.slots.length}件の空き時間</div>
+            <div class="meta-line">${new Set(group.slots.map((a) => a.member_id)).size}人が入力</div>
           </div>
           <span class="badge good">${new Set(group.slots.map((a) => a.member_id)).size}/${state.members.length}人入力</span>
         </div>
@@ -874,28 +747,6 @@ function renderAvailabilityList() {
       </article>
     `;
   }).join('');
-}
-
-function renderMatrix() {
-  const table = $('availabilityMatrix');
-  const weekAvailability = selectedWeekAvailability();
-  if (!state.members.length || !weekAvailability.length) {
-    table.innerHTML = '<tr><td class="empty">この週の日付ごとの入力状況はまだありません。</td></tr>';
-    return;
-  }
-  const groups = groupAvailabilityByDate(weekAvailability);
-  const head = `<tr><th>日付</th>${state.members.map((m) => `<th>${escapeHtml(m.name)}</th>`).join('')}</tr>`;
-  const rows = groups.map((group) => {
-    const cells = state.members.map((m) => {
-      const slots = group.slots
-        .filter((a) => a.member_id === m.id)
-        .sort(sortByDateTime)
-        .map((a) => `${String(a.start_time).slice(0,5)}〜${String(a.end_time).slice(0,5)}（${normalizeLocation(a.location)}）${a.mergedMemos?.length ? `：${a.mergedMemos.join(' / ')}` : ''}`);
-      return `<td>${slots.length ? slots.map(escapeHtml).join('<br>') : '<span class="muted">未入力</span>'}</td>`;
-    }).join('');
-    return `<tr><td><b>${formatDate(group.date)}</b></td>${cells}</tr>`;
-  }).join('');
-  table.innerHTML = head + rows;
 }
 
 function escapeHtml(value) {

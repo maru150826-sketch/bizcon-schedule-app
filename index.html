@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SAMPO QUEST 空き時間調整</title>
-  <link rel="stylesheet" href="./style.css?v=15" />
+  <link rel="stylesheet" href="./style.css?v=16" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
@@ -43,6 +43,17 @@
       </div>
     </section>
 
+    <section id="confirmedSection" class="card priority-card is-hidden">
+      <div class="section-title">
+        <span class="step check-step">✓</span>
+        <div>
+          <h2>確定した作業予定</h2>
+          <p>確定済みの日時を先に表示します。間違えたらここから確定を外せます。</p>
+        </div>
+      </div>
+      <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
+    </section>
+
     <section id="memberSection" class="card is-hidden">
       <div class="section-title">
         <span class="step">1</span>
@@ -63,17 +74,6 @@
       <div id="currentMemberBox" class="small-box is-hidden"></div>
       <h3 class="mini-heading">回答者一覧</h3>
       <div id="memberList" class="member-list"></div>
-    </section>
-
-    <section id="confirmedSection" class="card priority-card is-hidden">
-      <div class="section-title">
-        <span class="step check-step">✓</span>
-        <div>
-          <h2>確定した作業予定</h2>
-          <p>確定済みの日時を先に表示します。間違えたらここから確定を外せます。</p>
-        </div>
-      </div>
-      <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
     </section>
 
     <section id="weekSection" class="card is-hidden">
@@ -116,18 +116,6 @@
             <select id="availableEnd" name="end_time" required></select>
           </label>
         </div>
-        <div class="quick-section full">
-          <div class="quick-head">
-            <h3>場所</h3>
-            <span id="selectedLocationText" class="selected-text">未選択</span>
-          </div>
-          <div class="quick-grid three-grid" id="locationPresetList">
-            <button type="button" class="chip location-chip" data-location="オンライン">オンライン</button>
-            <button type="button" class="chip location-chip" data-location="大学">大学</button>
-            <button type="button" class="chip location-chip" data-location="どちらでも">どちらでも</button>
-          </div>
-          <input id="availableLocation" name="location" type="hidden" required />
-        </div>
         <label class="full">メモ 任意
           <textarea id="availableMemo" name="memo" rows="3" placeholder="例：19時以降なら安定。途中参加になるかも。"></textarea>
         </label>
@@ -165,29 +153,17 @@
         <span class="step">4</span>
         <div>
           <h2>みんなの空き時間</h2>
-          <p>誰がいつ空いているかを一覧で確認できます。自分の空き時間は編集・削除できます。</p>
+          <p>日付ごとに、誰が何時から何時まで空いているかを確認できます。自分の空き時間は編集・削除できます。</p>
         </div>
       </div>
       <div id="availabilityList" class="availability-list"></div>
     </section>
 
-    <section id="matrixSection" class="card is-hidden">
-      <div class="section-title">
-        <span class="step">4</span>
-        <div>
-          <h2>入力状況の表</h2>
-          <p>誰がどの日に、何時から何時まで空いているかを確認できます。</p>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table id="availabilityMatrix"></table>
-      </div>
-    </section>
   </main>
 
   <footer class="footer">GitHub Pages + Supabase / 固定チーム専用</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=15"></script>
+  <script src="./app.js?v=16"></script>
 </body>
 </html>
