@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SAMPO QUEST 空き時間調整</title>
-  <link rel="stylesheet" href="./style.css?v=24" />
+  <link rel="stylesheet" href="./style.css?v=25" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
@@ -12,8 +12,8 @@
 
   <header class="hero">
     <p class="eyebrow">SAMPO QUEST TEAM BOARD</p>
-    <h1>空き時間から決める予定調整</h1>
-    <p class="lead">候補日を先に決めず、各メンバーが空いている時間を入力します。アプリが全員または多くの人が集まれる日時を提示します。</p>
+    <h1>空き時間を入れるだけ</h1>
+    <p class="lead">名前を選んで、空いている時間を入れる。あとは集まりやすい日時をアプリが出します。</p>
   </header>
 
   <main class="container">
@@ -32,7 +32,7 @@
         <button id="refreshButton" class="secondary" type="button">最新状況を読み込む</button>
       </div>
       <details class="guide-box compact-guide">
-        <summary>使い方を見る</summary>
+        <summary>詳しい使い方を見る</summary>
         <ol>
           <li>自分の名前を選ぶ</li>
           <li>自分が空いている時間を何個でも入力する</li>
@@ -40,6 +40,26 @@
           <li>確定後、未入力の人は参加可否を入れる</li>
         </ol>
       </details>
+    </section>
+
+    <section id="quickStartSection" class="card quick-start-card is-hidden">
+      <div class="quick-start-grid">
+        <a href="#memberSection" class="quick-step">
+          <span>1</span>
+          <b>名前を選ぶ</b>
+          <small id="quickMemberText">未選択</small>
+        </a>
+        <a href="#availabilitySection" class="quick-step">
+          <span>2</span>
+          <b>空き時間を入れる</b>
+          <small id="quickInputText">スマホで簡単入力</small>
+        </a>
+        <a href="#suggestionSection" class="quick-step accent">
+          <span>3</span>
+          <b>おすすめを見る</b>
+          <small id="quickSuggestionText">候補を確認</small>
+        </a>
+      </div>
     </section>
 
     <section id="confirmedSection" class="card priority-card is-hidden">
@@ -121,6 +141,19 @@
         </summary>
 
         <form id="availabilityForm" class="slot-form fold-body">
+          <div class="mobile-quick-box full">
+            <div class="quick-row-head">
+              <b>スマホ用クイック入力</b>
+              <span>よく使う日付・時間を一発入力</span>
+            </div>
+            <div class="quick-button-grid" id="quickDateButtons"></div>
+            <div class="quick-button-grid time-grid">
+              <button type="button" class="quick-fill-button" data-time-range="09:00-12:00">午前</button>
+              <button type="button" class="quick-fill-button" data-time-range="13:00-17:00">午後</button>
+              <button type="button" class="quick-fill-button" data-time-range="18:00-21:00">夜</button>
+              <button type="button" class="quick-fill-button" data-time-range="20:00-22:00">20時〜</button>
+            </div>
+          </div>
           <label class="full">日付
             <input id="availableDate" name="date" type="date" required />
           </label>
@@ -143,22 +176,11 @@
       </details>
     </section>
 
-    <section id="availabilityListSection" class="card is-hidden">
+    <section id="suggestionSection" class="card is-hidden">
       <div class="section-title">
         <span class="step">3</span>
         <div>
-          <h2>みんなの空き時間</h2>
-          <p>日付ごとに、誰が何時から何時まで空いているかを確認できます。自分の空き時間は編集・削除できます。</p>
-        </div>
-      </div>
-      <div id="availabilityList" class="availability-list"></div>
-    </section>
-
-    <section id="suggestionSection" class="card is-hidden">
-      <div class="section-title">
-        <span class="step">4</span>
-        <div>
-          <h2>集まりやすい日時の提案</h2>
+          <h2>おすすめ日時</h2>
           <p>2人以上が重なっている時間を中心に、アプリが候補を絞って表示します。</p>
         </div>
       </div>
@@ -176,11 +198,22 @@
       <div id="suggestionList" class="candidate-list"></div>
     </section>
 
+    <section id="availabilityListSection" class="card is-hidden">
+      <div class="section-title">
+        <span class="step">一覧</span>
+        <div>
+          <h2>みんなの空き時間</h2>
+          <p>確認・編集用の一覧です。自分の空き時間はここから編集できます。</p>
+        </div>
+      </div>
+      <div id="availabilityList" class="availability-list"></div>
+    </section>
+
   </main>
 
   <footer class="footer">GitHub Pages + Supabase / 固定チーム専用</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=24"></script>
+  <script src="./app.js?v=25"></script>
 </body>
 </html>

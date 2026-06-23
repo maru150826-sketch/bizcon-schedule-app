@@ -125,6 +125,49 @@ function fillTimeSelects() {
   $('availableEnd').value = '21:00';
 }
 
+function defaultAvailabilityDate() {
+  const today = dateToISO(new Date());
+  if (isInSelectedWeek(today)) return today;
+  return state.weekStart;
+}
+
+function openAvailabilityInput() {
+  const details = $('manualInputDetails');
+  if (details) details.open = true;
+  $('availabilitySection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setAvailabilityDate(date) {
+  $('availableDate').value = date;
+  const weekStart = startOfWeekISO(date);
+  if (weekStart !== state.weekStart) {
+    state.weekStart = weekStart;
+    localStorage.setItem('sq_week_start', weekStart);
+  }
+  renderWeekControl();
+  renderQuickDateButtons();
+}
+
+function setAvailabilityTimeRange(start, end) {
+  $('availableStart').value = start;
+  $('availableEnd').value = end;
+}
+
+function handleQuickDateClick(event) {
+  const button = event.target.closest('[data-date]');
+  if (!button) return;
+  setAvailabilityDate(button.dataset.date);
+  openAvailabilityInput();
+}
+
+function handleQuickTimeClick(event) {
+  const range = event.currentTarget.dataset.timeRange || '';
+  const [start, end] = range.split('-');
+  if (!start || !end) return;
+  setAvailabilityTimeRange(start, end);
+  openAvailabilityInput();
+}
+
 function bindEvents() {
   const on = (id, type, handler) => {
     const el = $(id);
@@ -140,6 +183,8 @@ function bindEvents() {
   on('nextNextWeekButton', 'click', () => setWeek(addDaysISO(startOfWeekISO(new Date()), 14)));
   on('thisWeekButton', 'click', () => setWeek(startOfWeekISO(new Date())));
   on('weekPicker', 'change', (event) => setWeek(startOfWeekISO(event.target.value)));
+  on('quickDateButtons', 'click', handleQuickDateClick);
+  document.querySelectorAll('[data-time-range]').forEach((button) => button.addEventListener('click', handleQuickTimeClick));
 }
 
 async function init() {
@@ -249,6 +294,7 @@ async function loadNotes() {
 function setWeek(weekStart) {
   state.weekStart = weekStart;
   localStorage.setItem('sq_week_start', weekStart);
+  if (!$('availableDate').value || !isInSelectedWeek($('availableDate').value)) $('availableDate').value = defaultAvailabilityDate();
   render();
   toast(`${formatWeekRange()} を表示しています`);
 }
@@ -364,6 +410,7 @@ function cancelEditAvailability() { resetAvailabilityForm(); }
 function resetAvailabilityForm() {
   state.editingAvailabilityId = '';
   $('availabilityForm').reset();
+  $('availableDate').value = defaultAvailabilityDate();
   $('availableStart').value = '18:00';
   $('availableEnd').value = '21:00';
   $('availabilitySubmit').textContent = '空き時間を追加';
@@ -729,10 +776,12 @@ async function saveConfirmedMemo(slotId) {
 }
 
 function render() {
-  ['groupSection','confirmedSection','memberSection','weekSection','availabilitySection','availabilityListSection','suggestionSection']
+  ['groupSection','quickStartSection','confirmedSection','memberSection','weekSection','availabilitySection','suggestionSection','availabilityListSection']
     .forEach((id) => $(id).classList.remove('is-hidden'));
   renderGroup();
+  renderQuickStart();
   renderWeekControl();
+  renderQuickDateButtons();
   renderConfirmed();
   renderMembers();
   renderCurrentMember();
@@ -740,6 +789,16 @@ function render() {
   renderAvailabilityList();
   renderSuggestions();
 }
+
+function renderQuickStart() {
+  const m = currentMember();
+  const suggestions = buildSuggestions();
+  const mySlots = selectedWeekAvailability().filter((a) => a.member_id === state.currentMemberId);
+  $('quickMemberText').textContent = m ? `${m.name}で入力中` : 'まず選ぶ';
+  $('quickInputText').textContent = mySlots.length ? `今週 ${mySlots.length}件入力済み` : '未入力';
+  $('quickSuggestionText').textContent = suggestions.length ? `${suggestions.length}件あり` : 'まだ候補なし';
+}
+
 function renderGroup() {
   $('groupName').textContent = state.group?.name || 'SAMPO QUEST ビジコンチーム';
   $('groupDescription').textContent = state.group?.description || '';
@@ -748,6 +807,17 @@ function renderWeekControl() {
   $('weekRangeText').textContent = formatWeekRange();
   $('weekPicker').value = state.weekStart;
   $('weekHintText').textContent = `表示中：${formatWeekRange()}。よく使う週は「今週・来週・再来週」から選べます。`;
+  if (!$('availableDate').value) $('availableDate').value = defaultAvailabilityDate();
+}
+function renderQuickDateButtons() {
+  const box = $('quickDateButtons');
+  if (!box) return;
+  const dates = Array.from({ length: 7 }, (_, index) => addDaysISO(state.weekStart, index));
+  box.innerHTML = dates.map((date) => {
+    const selected = $('availableDate').value === date;
+    const label = formatDate(date).replace(/[()]/g, ' ');
+    return `<button type="button" class="quick-fill-button ${selected ? 'is-selected' : ''}" data-date="${date}">${label}</button>`;
+  }).join('');
 }
 function renderMembers() {
   const box = $('memberList');
