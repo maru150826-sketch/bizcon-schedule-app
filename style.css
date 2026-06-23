@@ -908,3 +908,213 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
     scroll-margin-top: 10px;
   }
 }
+
+/* v26: mobile polish and name-first flow */
+.compact-team-card {
+  padding: 13px 15px;
+}
+.compact-team-card .group-head {
+  align-items: center;
+}
+.compact-team-card h2 {
+  font-size: 18px;
+}
+.compact-team-card .compact-guide {
+  margin-top: 10px;
+}
+
+@media (max-width: 720px) {
+  :root {
+    --shadow: 0 12px 28px rgba(31, 41, 51, 0.08);
+  }
+  body {
+    background:
+      radial-gradient(circle at 50% -10%, rgba(64, 90, 112, 0.16), transparent 34%),
+      linear-gradient(180deg, #f4efe7 0%, #f7f3ec 42%, #f6f3ee 100%);
+  }
+  .hero {
+    padding: 22px 16px 18px;
+    border-bottom-left-radius: 22px;
+    border-bottom-right-radius: 22px;
+    box-shadow: 0 12px 28px rgba(31, 52, 72, 0.14);
+  }
+  .hero h1 {
+    max-width: none;
+    margin: 4px 0 7px;
+    letter-spacing: -0.045em;
+  }
+  .hero .lead,
+  .hero .eyebrow {
+    max-width: none;
+  }
+  .container {
+    width: min(100% - 14px, 980px);
+    margin-top: 12px;
+    gap: 10px;
+  }
+  .card,
+  .notice {
+    padding: 14px;
+    border-radius: 20px;
+  }
+  .section-title {
+    gap: 9px;
+    margin-bottom: 12px;
+  }
+  .section-title h2 {
+    font-size: 18px;
+  }
+  .section-title p {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .step {
+    width: 31px;
+    height: 31px;
+    font-size: 13px;
+  }
+  .member-collapsible-card {
+    border: 2px solid rgba(36, 59, 83, 0.22);
+    background: linear-gradient(180deg, #ffffff, #f7fbff);
+  }
+  .current-member-summary {
+    padding: 11px 12px;
+    border-radius: 15px;
+    margin-bottom: 9px;
+  }
+  .member-status-main {
+    display: grid;
+    gap: 8px;
+  }
+  .member-status-main .danger {
+    width: 100%;
+  }
+  .member-chooser-details {
+    border-radius: 16px;
+  }
+  .member-chooser-details > summary {
+    min-height: 52px;
+    border-radius: 16px;
+    background: #fff;
+  }
+  .member-chooser-body {
+    padding: 12px;
+  }
+  .mini-heading {
+    margin: 6px 0 10px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .member-collapsible-card .member-list {
+    gap: 9px;
+  }
+  .member-collapsible-card .member-chip {
+    min-height: 58px;
+    border-radius: 16px;
+    box-shadow: 0 8px 16px rgba(31, 41, 51, 0.06);
+  }
+  .add-member-details {
+    padding: 11px;
+    border-radius: 15px;
+  }
+  input,
+  select,
+  textarea {
+    min-height: 50px;
+    border-radius: 15px;
+    font-size: 16px;
+  }
+  .primary,
+  .secondary,
+  .danger,
+  .ghost {
+    min-height: 48px;
+    border-radius: 15px;
+  }
+  .quick-start-card {
+    padding: 12px;
+  }
+  .quick-step {
+    border-radius: 17px;
+    background: linear-gradient(180deg, #ffffff, #f8fbff);
+  }
+  .quick-step.accent {
+    background: linear-gradient(180deg, #fffdf9, #fff3e6);
+  }
+  .priority-card {
+    border-width: 1px;
+  }
+  .week-control {
+    gap: 8px;
+  }
+  .week-main {
+    border-radius: 16px;
+  }
+  .fold-card > summary {
+    padding: 2px;
+  }
+  .fold-hint {
+    padding: 7px 9px;
+  }
+  .fold-body {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  .mobile-quick-box {
+    background: linear-gradient(180deg, #f8fbff, #fffdf9);
+    border-color: #d7e3ee;
+  }
+  .quick-button-grid {
+    gap: 8px;
+  }
+  .quick-fill-button {
+    border-radius: 15px;
+    box-shadow: 0 6px 12px rgba(31, 41, 51, 0.05);
+  }
+  .hot-candidate-card,
+  .availability-card,
+  .confirmed-card {
+    border-radius: 18px;
+    padding: 13px;
+  }
+  .date-title {
+    font-size: 18px;
+  }
+  .hot-date-title {
+    font-size: 23px;
+  }
+  .hot-label-row,
+  .badge-row {
+    gap: 6px;
+  }
+  .badge {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+  .people-box {
+    border-radius: 15px;
+    font-size: 13px;
+  }
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .daily-line {
+    border-radius: 15px;
+    background: #fff;
+  }
+  .compact-team-card {
+    padding: 12px;
+    opacity: 0.92;
+  }
+  .compact-team-card .group-head {
+    gap: 10px;
+  }
+  .compact-team-card h2 {
+    font-size: 16px;
+  }
+  .footer {
+    padding: 18px 12px 28px;
+    font-size: 12px;
+  }
+}
