@@ -4,109 +4,149 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SAMPO QUEST 空き時間調整</title>
-  <link rel="stylesheet" href="./style.css?v=21" />
+  <link rel="stylesheet" href="./style.css?v=23" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
   <div id="toast" class="toast is-hidden"></div>
 
-  <header class="hero compact-hero action-hero">
+  <header class="hero">
     <p class="eyebrow">SAMPO QUEST TEAM BOARD</p>
-    <h1>集まれる時間だけ、すぐ決める</h1>
-    <p class="lead">まず確定予定を確認し、自分の名前を選び、集まりそうな時間に「参加できる」を押してください。候補がない時だけ、自分の空き時間を追加します。</p>
+    <h1>空き時間から決める予定調整</h1>
+    <p class="lead">候補日を先に決めず、各メンバーが空いている時間を入力します。アプリが全員または多くの人が集まれる日時を提示します。</p>
   </header>
 
-  <main class="container compact-container">
+  <main class="container">
     <section id="setupNotice" class="notice is-hidden">
       <h2>Supabase設定が未完了です</h2>
       <p><code>app.js</code> の <code>SUPABASE_URL</code> と <code>SUPABASE_ANON_KEY</code> を確認してください。</p>
     </section>
 
-    <section id="groupSection" class="card slim-card is-hidden">
-      <div class="group-head compact-group-head">
+    <section id="groupSection" class="card is-hidden">
+      <div class="group-head">
         <div>
-          <p class="eyebrow dark-eyebrow">CURRENT TEAM</p>
+          <p class="eyebrow">CURRENT TEAM</p>
           <h2 id="groupName">読み込み中</h2>
           <p id="groupDescription" class="muted"></p>
         </div>
         <button id="refreshButton" class="secondary" type="button">最新状況を読み込む</button>
       </div>
-      <details class="guide-box compact-guide tiny-guide">
+      <details class="guide-box compact-guide">
         <summary>使い方を見る</summary>
         <ol>
-          <li>確定予定を確認する</li>
           <li>自分の名前を選ぶ</li>
-          <li>集まりそうな時間に「参加できる」を押す</li>
-          <li>なければ「空き時間を追加」から入力する</li>
+          <li>自分が空いている時間を何個でも入力する</li>
+          <li>集まりやすい日時から確定する</li>
+          <li>確定後、未入力の人は参加可否を入れる</li>
         </ol>
       </details>
     </section>
 
-    <section id="confirmedSection" class="card top-confirmed-section is-hidden">
-      <div class="section-title compact-title">
+    <section id="confirmedSection" class="card priority-card is-hidden">
+      <div class="section-title">
         <span class="step check-step">✓</span>
         <div>
           <h2>確定した作業予定</h2>
-          <p>決まった日時を最上部に表示します。参加可否と共有メモもここで確認できます。</p>
+          <p>確定済みの日時を先に表示します。参加可否の追加回答と共有メモもここで管理できます。</p>
         </div>
       </div>
       <div id="confirmedBox" class="empty">まだ確定した作業予定はありません。</div>
     </section>
 
-    <section id="memberSection" class="card top-member-card is-hidden">
-      <div class="section-title compact-title">
+    <section id="memberSection" class="card member-collapsible-card is-hidden">
+      <div class="section-title compact-member-title">
         <span class="step">1</span>
         <div>
-          <h2>自分の名前を選ぶ</h2>
-          <p>この選択だけ先にしてください。スマホでもPCでも、同じ名前を選べば同じ人として使えます。</p>
+          <h2>自分の名前</h2>
+          <p>最初に自分の名前を選びます。選んだあとは折りたたんで画面を広く使えます。</p>
         </div>
       </div>
-      <div id="currentMemberBox" class="small-box current-member-highlight is-hidden"></div>
-      <div id="memberList" class="member-list large-member-list"></div>
-      <div id="inputStatusBox" class="input-status-box"></div>
-      <details class="add-member-details">
-        <summary>＋ 新しい回答者を追加する</summary>
-        <form id="memberForm" class="form-grid add-member-form">
-          <label>メンバー名
-            <input name="name" required placeholder="例：田丸" autocomplete="name" />
-          </label>
-          <label>役割・メモ 任意
-            <input name="role_memo" placeholder="例：収益モデル担当" />
-          </label>
-          <button type="submit" class="primary full">追加 / メモ更新</button>
-        </form>
+      <div id="currentMemberBox" class="small-box current-member-summary is-hidden"></div>
+
+      <details id="memberChooser" class="member-chooser-details" open>
+        <summary>
+          <span>回答者を選ぶ・追加する</span>
+          <small>タップで開閉</small>
+        </summary>
+        <div class="member-chooser-body">
+          <h3 class="mini-heading">回答者一覧</h3>
+          <div id="memberList" class="member-list"></div>
+
+          <details class="add-member-details inner-add-member">
+            <summary>新しい回答者を追加する</summary>
+            <form id="memberForm" class="form-grid add-member-form">
+              <label>メンバー名
+                <input name="name" required placeholder="例：田丸" autocomplete="name" />
+              </label>
+              <label>役割・メモ 任意
+                <input name="role_memo" placeholder="例：収益モデル担当" />
+              </label>
+              <button type="submit" class="primary full">追加 / メモ更新</button>
+            </form>
+          </details>
+        </div>
       </details>
     </section>
 
-    <section id="weekSection" class="card slim-card is-hidden">
-      <div class="section-title compact-title">
+    <section id="weekSection" class="card is-hidden">
+      <div class="section-title">
         <span class="step">週</span>
         <div>
-          <h2>表示する週</h2>
-          <p id="weekHintText">今週・来週・再来週から選べます。</p>
+          <h2>表示する週を選ぶ</h2>
+          <p id="weekHintText">この週の空き時間・提案だけを表示します。</p>
         </div>
       </div>
-      <div class="week-control simple-week-control">
-        <button id="thisWeekButton" type="button" class="primary">今週</button>
-        <button id="nextWeekButton" type="button" class="secondary">来週</button>
-        <button id="nextNextWeekButton" type="button" class="secondary">再来週</button>
-        <div class="week-main compact-week-main">
+      <div class="week-control">
+        <button id="prevWeekButton" type="button" class="secondary">前の週</button>
+        <div class="week-main">
           <b id="weekRangeText">読み込み中</b>
-          <input id="weekPicker" type="date" aria-label="表示週を日付から選ぶ" />
+          <input id="weekPicker" type="date" />
         </div>
-        <button id="prevWeekButton" type="button" class="secondary ghost">前の週</button>
+        <button id="nextWeekButton" type="button" class="secondary">次の週</button>
+        <button id="thisWeekButton" type="button" class="secondary ghost">今週に戻る</button>
       </div>
     </section>
 
-    <section id="suggestionSection" class="card hot-suggestions-section is-hidden">
-      <div class="section-title compact-title">
+    <section id="availabilitySection" class="card is-hidden">
+      <div class="section-title">
         <span class="step">2</span>
         <div>
-          <h2>集まりそうな時間</h2>
-          <p>2人以上が重なっている時間だけ表示します。自分も行けるなら、ここで押すだけです。</p>
+          <h2>空いている時間を入力</h2>
+          <p>候補日を考えず、自分が空いている時間を何個でも入れてください。時間は30分刻みです。</p>
         </div>
       </div>
-      <div class="control-line compact-control-line">
+
+      <form id="availabilityForm" class="slot-form">
+        <label class="full">日付
+          <input id="availableDate" name="date" type="date" required />
+        </label>
+        <div class="form-grid full no-gap-top">
+          <label>開始時間
+            <select id="availableStart" name="start_time" required></select>
+          </label>
+          <label>終了時間
+            <select id="availableEnd" name="end_time" required></select>
+          </label>
+        </div>
+        <label class="full">メモ 任意
+          <textarea id="availableMemo" name="memo" rows="3" placeholder="例：19時以降なら安定。途中参加になるかも。"></textarea>
+        </label>
+        <div class="button-row full">
+          <button id="availabilitySubmit" type="submit" class="primary big-button">空き時間を追加</button>
+          <button id="cancelEditAvailability" type="button" class="secondary is-hidden">編集をやめる</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="suggestionSection" class="card is-hidden">
+      <div class="section-title">
+        <span class="step">3</span>
+        <div>
+          <h2>集まりやすい日時の提案</h2>
+          <p>似た時間を大量に出さず、アプリが重なりの強い枠だけに自動で絞ります。</p>
+        </div>
+      </div>
+      <div class="control-line">
         <label>必要な作業時間
           <select id="minDurationSelect">
             <option value="60">1時間以上</option>
@@ -115,56 +155,27 @@
             <option value="180">3時間以上</option>
           </select>
         </label>
-        <span class="muted">最大4件まで表示。似た候補は自動でまとめます。</span>
+        <span class="muted">最大6件まで自動表示。似ている時間はまとめて減らします。</span>
       </div>
-      <div id="suggestionList" class="candidate-list hot-candidate-list"></div>
-    </section>
-
-    <section id="availabilitySection" class="card is-hidden">
-      <details id="manualInputDetails" class="manual-input-details">
-        <summary>
-          <span>＋ 自分の空き時間を追加する</span>
-          <small>集まりそうな時間に乗れない時だけ使います</small>
-        </summary>
-
-        <form id="availabilityForm" class="slot-form compact-slot-form manual-input-form">
-          <label class="full">日付
-            <input id="availableDate" name="date" type="date" required />
-          </label>
-          <div class="form-grid full no-gap-top">
-            <label>開始時間
-              <select id="availableStart" name="start_time" required></select>
-            </label>
-            <label>終了時間
-              <select id="availableEnd" name="end_time" required></select>
-            </label>
-          </div>
-          <label class="full">メモ 任意
-            <textarea id="availableMemo" name="memo" rows="3" placeholder="例：19時以降なら安定。途中参加になるかも。"></textarea>
-          </label>
-          <div class="button-row full">
-            <button id="availabilitySubmit" type="submit" class="primary big-button">空き時間を追加</button>
-            <button id="cancelEditAvailability" type="button" class="secondary is-hidden">編集をやめる</button>
-          </div>
-        </form>
-      </details>
+      <div id="suggestionList" class="candidate-list"></div>
     </section>
 
     <section id="availabilityListSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">3</span>
+        <span class="step">4</span>
         <div>
           <h2>みんなの空き時間</h2>
-          <p>日付ごとに、誰が何時から何時まで空いているかを確認できます。</p>
+          <p>日付ごとに、誰が何時から何時まで空いているかを確認できます。自分の空き時間は編集・削除できます。</p>
         </div>
       </div>
       <div id="availabilityList" class="availability-list"></div>
     </section>
+
   </main>
 
   <footer class="footer">GitHub Pages + Supabase / 固定チーム専用</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=21"></script>
+  <script src="./app.js?v=23"></script>
 </body>
 </html>

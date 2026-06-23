@@ -30,6 +30,16 @@ const state = {
 };
 
 function showLoading(show) { $('loading').classList.toggle('is-hidden', !show); }
+function collapseMemberChooser() {
+  const el = $('memberChooser');
+  if (el) el.open = false;
+}
+
+function expandMemberChooser() {
+  const el = $('memberChooser');
+  if (el) el.open = true;
+}
+
 function toast(message) {
   const el = $('toast');
   el.textContent = message;
@@ -263,6 +273,7 @@ async function handleMemberSubmit(event) {
     localStorage.setItem('sq_current_member_id', data.id);
     event.currentTarget.reset();
     await loadAll({ silent: true });
+    collapseMemberChooser();
     toast(`${data.name}として選択しました`);
   } catch (error) {
     fail(error, '回答者の追加に失敗しました');
@@ -273,6 +284,7 @@ async function selectMember(id) {
   state.currentMemberId = id;
   localStorage.setItem('sq_current_member_id', id);
   render();
+  collapseMemberChooser();
   toast(`${memberName(id)}として入力します`);
 }
 
@@ -741,6 +753,7 @@ function renderMembers() {
   const box = $('memberList');
   if (!state.members.length) {
     box.innerHTML = '<div class="empty">まだ回答者がいません。「新しい回答者を追加する」から自分の名前を入れてください。</div>';
+    expandMemberChooser();
     return;
   }
   box.innerHTML = state.members.map((m) => {
@@ -759,6 +772,7 @@ function renderCurrentMember() {
   if (!m) {
     box.classList.remove('is-hidden');
     box.innerHTML = '<b>現在：未選択</b><br><span class="muted">下の回答者ボタンから自分の名前を選んでください。選ぶと空き時間の追加・編集、確定日時への参加回答ができます。</span>';
+    expandMemberChooser();
     return;
   }
   box.classList.remove('is-hidden');
