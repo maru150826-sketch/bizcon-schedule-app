@@ -365,6 +365,32 @@ async function deleteAvailability(id) {
   }
 }
 
+async function endorseAvailability(id) {
+  const m = currentMember();
+  if (!m) return toast('先に自分の名前を選んでください');
+  const item = state.availability.find((a) => a.id === id);
+  if (!item) return toast('空き時間が見つかりません。再読み込みしてください');
+  if (item.member_id === m.id) return toast('これは自分の空き時間です');
+  if (hasSameAvailabilityForMember(m.id, item)) return toast('すでにこの時間に賛同済みです');
+
+  try {
+    const { error } = await client.from('availability_slots').insert({
+      group_id: state.group.id,
+      member_id: m.id,
+      date: item.date,
+      start_time: String(item.start_time).slice(0,5),
+      end_time: String(item.end_time).slice(0,5),
+      location: 'どちらでも',
+      memo: `${memberName(item.member_id)}さんの空き時間に賛同`
+    });
+    if (error) throw error;
+    await loadAll({ silent: true });
+    toast(`${formatRange(item)} に賛同しました`);
+  } catch (error) {
+    fail(error, '賛同の保存に失敗しました');
+  }
+}
+
 function slotOverlap(slot, date, start, end) {
   if (slot.date !== date) return null;
   const overlapStart = Math.max(minutes(slot.start_time), start);
@@ -815,10 +841,34 @@ function mergeDuplicateAvailability(items) {
   }
   return [...map.values()];
 }
+function sameTimeSlot(a, b) {
+  return a.date === b.date
+    && String(a.start_time).slice(0,5) === String(b.start_time).slice(0,5)
+    && String(a.end_time).slice(0,5) === String(b.end_time).slice(0,5);
+}
+function hasSameAvailabilityForMember(memberId, item) {
+  return state.availability.some((slot) => slot.member_id === memberId && sameTimeSlot(slot, item));
+}
 function slotLine(item, { includeMemo = true } = {}) {
   const time = `${String(item.start_time).slice(0,5)}〜${String(item.end_time).slice(0,5)}`;
   const memo = includeMemo && item.mergedMemos?.length ? `：${item.mergedMemos.map(escapeHtml).join(' / ')}` : '';
   return `<b>${escapeHtml(memberName(item.member_id))}</b>　${time}${memo}`;
+}
+function renderAvailabilityLine(item) {
+  const m = currentMember();
+  const isMine = m && item.member_id === m.id;
+  const endorsed = m && !isMine && hasSameAvailabilityForMember(m.id, item);
+  const canEndorse = m && !isMine && !endorsed;
+  return `
+    <div class="daily-line daily-line-with-action">
+      <div class="daily-line-main">${slotLine(item)}</div>
+      <div class="daily-line-actions">
+        ${canEndorse ? `<button type="button" class="secondary mini-button" onclick="endorseAvailability('${item.id}')">この時間に賛同</button>` : ''}
+        ${endorsed ? '<span class="badge good">賛同済み</span>' : ''}
+        ${isMine ? '<span class="badge">自分の入力</span>' : ''}
+      </div>
+    </div>
+  `;
 }
 function renderAvailabilityList() {
   const box = $('availabilityList');
@@ -840,7 +890,7 @@ function renderAvailabilityList() {
           <span class="badge good">${new Set(group.slots.map((a) => a.member_id)).size}/${state.members.length}人入力</span>
         </div>
         <div class="daily-lines">
-          ${group.slots.map((a) => `<div class="daily-line">${slotLine(a)}</div>`).join('')}
+          ${group.slots.map((a) => renderAvailabilityLine(a)).join('')}
         </div>
         ${mine.length ? `
           <div class="action-row">
@@ -867,6 +917,7 @@ window.selectMember = selectMember;
 window.deleteSelectedMember = deleteSelectedMember;
 window.editAvailability = editAvailability;
 window.deleteAvailability = deleteAvailability;
+window.endorseAvailability = endorseAvailability;
 window.confirmSuggestion = confirmSuggestion;
 window.unconfirmSlot = unconfirmSlot;
 window.setConfirmedResponse = setConfirmedResponse;

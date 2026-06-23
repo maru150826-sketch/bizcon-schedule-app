@@ -195,6 +195,28 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
   margin-top: 12px;
 }
 
+.daily-line-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.daily-line-main {
+  min-width: 0;
+}
+.daily-line-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.mini-button {
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
 /* v17: confirmed schedule participation and shared memo */
 .compact-guide {
   padding: 10px 12px;
@@ -254,6 +276,19 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
     align-items: start;
   }
   .compact-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .daily-line-with-action {
+    display: grid;
+    gap: 8px;
+  }
+  .daily-line-actions {
+    justify-content: flex-start;
+  }
+  .mini-button {
     width: 100%;
   }
 }
