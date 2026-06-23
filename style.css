@@ -292,3 +292,84 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
     width: 100%;
   }
 }
+
+/* v19: make the member selector easier to find and tap */
+.selector-card {
+  border-color: #bfccda;
+  background: linear-gradient(180deg, #fffdf9 0%, #f7fbff 100%);
+  box-shadow: 0 16px 38px rgba(36, 59, 83, 0.12);
+}
+.compact-title {
+  margin-bottom: 10px;
+}
+.member-status-box {
+  margin-top: 0;
+  margin-bottom: 12px;
+  background: #eef6ff;
+  border-color: #c8d8e8;
+}
+.member-status-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.selector-heading {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+.member-list-prominent {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+}
+.member-list-prominent .member-chip {
+  border-radius: 16px;
+  min-height: 58px;
+  padding: 12px 14px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  text-align: center;
+  line-height: 1.25;
+  box-shadow: 0 8px 18px rgba(31, 41, 51, 0.06);
+}
+.member-chip-name {
+  font-size: 16px;
+  font-weight: 900;
+}
+.member-chip-memo {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.member-chip.is-current .member-chip-memo {
+  color: rgba(255,255,255,.78);
+}
+.add-member-panel {
+  margin-top: 14px;
+  padding: 12px 14px;
+}
+.add-member-panel summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+.member-form-compact {
+  margin-top: 12px;
+}
+@media (max-width: 720px) {
+  .hero {
+    padding-bottom: 18px;
+  }
+  .selector-card {
+    padding: 14px;
+  }
+  .member-list-prominent {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .member-list-prominent .member-chip {
+    min-height: 62px;
+    padding: 12px 8px;
+  }
+}

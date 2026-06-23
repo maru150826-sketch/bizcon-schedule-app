@@ -684,29 +684,35 @@ function renderWeekControl() {
 function renderMembers() {
   const box = $('memberList');
   if (!state.members.length) {
-    box.innerHTML = '<div class="empty">まだ回答者がいません。最初に自分の名前を追加してください。</div>';
+    box.innerHTML = '<div class="empty">まだ回答者がいません。「新しい回答者を追加する」から自分の名前を入れてください。</div>';
     return;
   }
-  box.innerHTML = state.members.map((m) => `
-    <button type="button" class="member-chip ${m.id === state.currentMemberId ? 'is-current' : ''}" onclick="selectMember('${m.id}')">
-      ${escapeHtml(m.name)}${m.role_memo ? ` / ${escapeHtml(m.role_memo)}` : ''}
-    </button>
-  `).join('');
+  box.innerHTML = state.members.map((m) => {
+    const isCurrent = m.id === state.currentMemberId;
+    return `
+      <button type="button" class="member-chip ${isCurrent ? 'is-current' : ''}" onclick="selectMember('${m.id}')" aria-pressed="${isCurrent}">
+        <span class="member-chip-name">${isCurrent ? '✓ ' : ''}${escapeHtml(m.name)}</span>
+        ${m.role_memo ? `<span class="member-chip-memo">${escapeHtml(m.role_memo)}</span>` : ''}
+      </button>
+    `;
+  }).join('');
 }
 function renderCurrentMember() {
   const box = $('currentMemberBox');
   const m = currentMember();
   if (!m) {
     box.classList.remove('is-hidden');
-    box.innerHTML = '<b>未選択</b><br>先に自分の名前を選んでください。選ぶと空き時間の追加・編集、確定日時への参加回答ができます。';
+    box.innerHTML = '<b>現在：未選択</b><br><span class="muted">下の回答者ボタンから自分の名前を選んでください。選ぶと空き時間の追加・編集、確定日時への参加回答ができます。</span>';
     return;
   }
   box.classList.remove('is-hidden');
   box.innerHTML = `
-    <b>現在：${escapeHtml(m.name)}として入力中</b>
-    ${m.role_memo ? `<div class="muted">${escapeHtml(m.role_memo)}</div>` : ''}
-    <div class="action-row" style="margin-top:10px">
-      <button type="button" class="danger" onclick="deleteSelectedMember()">この回答者を削除</button>
+    <div class="member-status-main">
+      <div>
+        <b>現在：${escapeHtml(m.name)}として入力中</b>
+        ${m.role_memo ? `<div class="muted">${escapeHtml(m.role_memo)}</div>` : ''}
+      </div>
+      <button type="button" class="danger mini-button" onclick="deleteSelectedMember()">回答者を削除</button>
     </div>
   `;
 }
