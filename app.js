@@ -2,7 +2,7 @@ const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
 
 const APP_KEY = 'sampo-quest-main';
-const SUGGESTION_LIMIT = 6;
+const SUGGESTION_LIMIT = 4;
 const SUGGESTION_PER_DATE_LIMIT = 2;
 
 const DEFAULT_GROUP = {
@@ -391,6 +391,54 @@ async function endorseAvailability(id) {
   }
 }
 
+async function endorseSuggestion(index) {
+  const m = currentMember();
+  if (!m) return toast('先に自分の名前を選んでください');
+  const suggestions = buildSuggestions();
+  const suggestion = suggestions[index];
+  if (!suggestion) return toast('提案が見つかりません。再読み込みしてください');
+  const start = minutes(suggestion.start_time);
+  const end = minutes(suggestion.end_time);
+  const coverage = memberCoverage(m.id, suggestion.date, start, end);
+  if (coverage.status === 'full') return toast('すでにこの時間に入っています');
+
+  try {
+    const { error } = await client.from('availability_slots').insert({
+      group_id: state.group.id,
+      member_id: m.id,
+      date: suggestion.date,
+      start_time: suggestion.start_time,
+      end_time: suggestion.end_time,
+      location: 'どちらでも',
+      memo: '集まりそうな時間に賛同'
+    });
+    if (error) throw error;
+    await loadAll({ silent: true });
+    toast(`${formatDate(suggestion.date)} ${suggestion.start_time}〜${suggestion.end_time} に入りました`);
+  } catch (error) {
+    fail(error, '賛同の保存に失敗しました');
+  }
+}
+
+function suggestionCoverageLabel(s) {
+  const totalPossible = s.fullIds.length + s.partialIds.length;
+  const allFull = s.fullIds.length === state.members.length && state.members.length > 0;
+  const allWithPartial = totalPossible === state.members.length && s.partialIds.length > 0;
+  if (allFull) return { label: '全員参加できる', cls: 'good' };
+  if (allWithPartial) return { label: '全員OK（一部あり）', cls: 'good' };
+  if (totalPossible >= Math.max(2, Math.ceil(state.members.length * 0.75))) return { label: 'かなり有力', cls: 'maybe' };
+  return { label: '2人以上OK', cls: 'maybe' };
+}
+
+function currentMemberSuggestionStatus(s) {
+  const m = currentMember();
+  if (!m) return { label: '名前を選ぶと賛同できます', canEndorse: false, cls: 'neutral' };
+  const coverage = memberCoverage(m.id, s.date, minutes(s.start_time), minutes(s.end_time));
+  if (coverage.status === 'full') return { label: '自分も参加済み', canEndorse: false, cls: 'good' };
+  if (coverage.status === 'partial') return { label: '自分は一部だけ入力済み', canEndorse: true, cls: 'maybe' };
+  return { label: '自分はまだ未入力', canEndorse: true, cls: 'neutral' };
+}
+
 function slotOverlap(slot, date, start, end) {
   if (slot.date !== date) return null;
   const overlapStart = Math.max(minutes(slot.start_time), start);
@@ -438,7 +486,7 @@ function buildSuggestions() {
     for (let start = minStart; start + 30 <= maxEnd; start += 30) {
       const end = start + 30;
       const coverage = collectCoverage(date, start, end);
-      const meaningful = coverage.fullIds.length + coverage.partialIds.length >= Math.min(2, state.members.length);
+      const meaningful = coverage.fullIds.length + coverage.partialIds.length >= 2;
       const key = meaningful ? `${coverage.fullIds.sort().join(',')}|${coverage.partialIds.sort().join(',')}|${coverage.missingIds.sort().join(',')}` : '';
       if (key !== currentKey) {
         pushSuggestionBlock(rawBlocks, date, blockStart, start, currentCoverage, minDuration);
@@ -462,7 +510,7 @@ function pushSuggestionBlock(list, date, start, end, coverage, minDuration) {
   const finalEnd = Math.min(end, preferredEnd);
   const finalCoverage = collectCoverage(date, start, finalEnd);
   const totalPossible = finalCoverage.fullIds.length + finalCoverage.partialIds.length;
-  if (!totalPossible) return;
+  if (totalPossible < 2) return;
   list.push({
     date,
     start_time: timeFromMinutes(start),
@@ -720,46 +768,47 @@ function renderSuggestions() {
   const box = $('suggestionList');
   const weekAvailability = selectedWeekAvailability();
   if (!state.members.length) {
-    box.innerHTML = '<div class="empty">回答者を追加すると、提案を計算できます。</div>';
+    box.innerHTML = '<div class="empty">先に回答者を追加してください。2人以上の空き時間が入ると、ここに候補が出ます。</div>';
     return;
   }
   if (!weekAvailability.length) {
-    box.innerHTML = `<div class="empty">${formatWeekRange()} にはまだ空き時間が入力されていません。</div>`;
+    box.innerHTML = `<div class="empty">${formatWeekRange()} にはまだ空き時間が入力されていません。まず誰か1人が空き時間を入れてください。</div>`;
     return;
   }
   const suggestions = buildSuggestions();
   if (!suggestions.length) {
-    box.innerHTML = '<div class="empty">指定した作業時間で重なる日時がありません。必要な作業時間を短くするか、空き時間を追加してください。</div>';
+    box.innerHTML = '<div class="empty">まだ2人以上が重なる時間がありません。誰かの空き時間に賛同するか、自分の空き時間を追加してください。</div>';
     return;
   }
 
   box.innerHTML = suggestions.map((s, index) => {
+    const label = suggestionCoverageLabel(s);
+    const own = currentMemberSuggestionStatus(s);
     const totalPossible = s.fullIds.length + s.partialIds.length;
-    const allFull = s.fullIds.length === state.members.length;
-    const allWithPartial = totalPossible === state.members.length && s.partialIds.length > 0;
-    const enough = totalPossible >= Math.max(2, Math.ceil(state.members.length * 0.75));
-    const label = allFull ? '全員フル参加' : allWithPartial ? '全員OK（一部参加あり）' : enough ? 'かなり有力' : '一部参加';
+    const participantNames = [
+      ...s.fullIds.map(memberName),
+      ...s.partialIds.filter((id) => !s.fullIds.includes(id)).map((id) => `${memberName(id)}(一部)`)
+    ];
     return `
-      <article class="candidate-card">
-        <div class="card-top">
+      <article class="candidate-card hot-candidate-card">
+        <div class="hot-card-main">
           <div>
-            <h3 class="date-title">${formatDate(s.date)} ${s.start_time}〜${s.end_time}</h3>
-            <div class="meta-line">${s.duration}分</div>
+            <div class="hot-label-row">
+              <span class="badge ${label.cls}">${label.label}</span>
+              <span class="badge ${own.cls || ''}">${own.label}</span>
+            </div>
+            <h3 class="date-title hot-date-title">${formatDate(s.date)} ${s.start_time}〜${s.end_time}</h3>
+            <div class="meta-line">${s.duration}分 / ${totalPossible}人が参加可能</div>
           </div>
-          <div class="badge-row">
-            <span class="badge ${allFull ? 'good' : enough ? 'maybe' : ''}">${label}</span>
-            <span class="badge good">フル ${s.fullIds.length}/${state.members.length}</span>
-            <span class="badge maybe">一部 ${s.partialIds.length}</span>
-            <span class="badge bad">未入力 ${s.missingIds.length}</span>
+          <div class="hot-actions">
+            ${own.canEndorse ? `<button type="button" class="primary big-button" onclick="endorseSuggestion(${index})">自分もこの時間に入れる</button>` : ''}
+            <button type="button" class="secondary" onclick="confirmSuggestion(${index})">この時間で確定</button>
           </div>
         </div>
-        <div class="people-box">
-          <div><b>フル参加：</b>${s.fullIds.map(memberName).join('、') || 'なし'}</div>
-          <div><b>一部参加：</b>${formatPartial(s.partial) || 'なし'}</div>
-          <div><b>この時間の入力なし：</b>${s.missingIds.map(memberName).join('、') || 'なし'}</div>
-        </div>
-        <div class="action-row">
-          <button type="button" class="primary" onclick="confirmSuggestion(${index})">この時間で確定</button>
+        <div class="people-box compact-people hot-people-box">
+          <div><b>入れる人：</b>${participantNames.join('、') || 'なし'}</div>
+          ${s.partialIds.length ? `<div><b>一部参加：</b>${formatPartial(s.partial)}</div>` : ''}
+          <div><b>まだ入力なし：</b>${s.missingIds.map(memberName).join('、') || 'なし'}</div>
         </div>
       </article>
     `;
@@ -924,6 +973,7 @@ window.deleteSelectedMember = deleteSelectedMember;
 window.editAvailability = editAvailability;
 window.deleteAvailability = deleteAvailability;
 window.endorseAvailability = endorseAvailability;
+window.endorseSuggestion = endorseSuggestion;
 window.confirmSuggestion = confirmSuggestion;
 window.unconfirmSlot = unconfirmSlot;
 window.setConfirmedResponse = setConfirmedResponse;

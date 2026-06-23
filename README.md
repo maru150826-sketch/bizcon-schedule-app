@@ -1,107 +1,72 @@
-# SAMPO QUEST 空き時間調整アプリ v19
+# SAMPO QUEST 空き時間調整アプリ v20
 
-GitHub Pages + Supabase で動く、固定チーム用の予定調整Webアプリです。
+GitHub Pages + Supabase で動く、ビジコンチーム用の予定調整Webアプリです。
 
-## 現在の考え方
+## v20 の変更点
 
-今までの「候補日を作る → ○△×で投票」方式ではなく、
+- 回答者選択を画面上部に配置
+- 確定した作業予定を上の方に大きく表示
+- 2人以上が重なっている時間だけを「集まりそうな時間」として上に表示
+- 集まりそうな時間から、すぐに「自分もこの時間に入れる」を押せる
+- 集まりそうな時間から、すぐに「この時間で確定」できる
+- みんなの空き時間は確認用として下に表示
+- 場所入力は削除
+- 使い方説明は折りたたみ式
 
-1. 各メンバーが自分の空いている時間を入力する
-2. アプリが空き時間の重なりを計算する
-3. 全員または多くの人が集まれる日時を提示する
-4. よさそうな日時を確定する
+## 使い方
 
-という流れに変更しています。
+1. 自分の名前を選ぶ
+2. 上の「集まりそうな時間」を見る
+3. 行ける時間があれば「自分もこの時間に入れる」を押す
+4. よさそうなら「この時間で確定」を押す
+5. 確定した予定は画面上部に表示される
+6. 必要なら共有メモや参加可否を追記する
 
-## ファイル構成
+## GitHub Pages に反映する方法
 
-- `index.html`
-- `style.css`
-- `app.js`
-- `supabase-schema.sql`
-- `README.md`
+この5ファイルをリポジトリに上書きアップロードしてください。
 
-## GitHub Pagesで公開する方法
+- index.html
+- style.css
+- app.js
+- README.md
+- supabase-schema.sql
 
-1. GitHubのリポジトリを開く
-2. v19の5ファイルをアップロード、または既存ファイルに上書き
-3. `Settings` → `Pages`
-4. `Deploy from a branch` を選ぶ
-5. `main` / `/root` を選んで保存
-6. 公開URLを開く
+最低限、画面変更だけなら以下の3ファイルで反映されます。
 
-反映されない場合は、公開URLの後ろに `?v=19` を付けて開いてください。
+- index.html
+- style.css
+- app.js
 
-## Supabase設定
+アップロード後、公開ページを開いて `Ctrl + F5` で強制更新してください。
+スマホの場合はURL末尾に `?v=20` を付けて開いてください。
 
-`app.js` の上部にSupabase URLとpublishable keyを設定します。
+例：
+
+```text
+https://maru150826-sketch.github.io/bizcon-schedule-app/?v=20
+```
+
+## Supabaseについて
+
+v11以降のSQLを実行済みで、以下のテーブルが存在していれば基本的に再実行不要です。
+
+- groups
+- members
+- availability_slots
+- time_slots
+- responses
+- meeting_notes
+
+不安な場合は `supabase-schema.sql` をSupabaseのSQL Editorで再実行してください。
+
+## Supabase URL / Key
+
+`app.js` の上部で設定します。
 
 ```js
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
 ```
 
-`sb_secret_...` や `service_role` は絶対に入れないでください。
-
-## SupabaseでSQLを実行する方法
-
-1. Supabaseのプロジェクトを開く
-2. 左メニューの `SQL Editor` を開く
-3. `New query` を押す
-4. `supabase-schema.sql` の中身を全部貼る
-5. `Run` を押す
-
-## 使用する主なテーブル
-
-### availability_slots
-
-メンバーごとの空き時間を保存します。
-
-- `id`
-- `group_id`
-- `member_id`
-- `date`
-- `start_time`
-- `end_time`
-- `location`
-- `memo`
-- `created_at`
-- `updated_at`
-
-## RLSについて
-
-RLSは有効化しています。ログインなしの少人数チーム利用を前提としているため、anonユーザーに select / insert / update / delete を許可しています。
-
-4人程度のチーム内利用では操作しやすさを優先しています。厳密な本人確認が必要になった場合は、Supabase Authによるログインを追加してください。
-
-## 使い方
-
-1. アプリを開く
-2. 自分の名前を追加、または一覧から選ぶ
-3. 自分が空いている日付・開始時間・終了時間を入力する
-4. 複数の空き時間を何個でも追加する
-5. 「集まりやすい日時の提案」に候補が表示される
-6. よさそうな日時を「この時間で確定」する
-7. 間違えた場合は「確定を外す」を押す
-
-
-## v15の変更
-
-- 「日ごとの場所判断」セクションを削除しました。
-- みんなの空き時間を、日付ごとに「田丸 18:00〜21:00、岩崎 19:00〜21:00」のように表示します。
-- 同じ人が同じ日時・同じ場所で重複入力した場合は1つにまとめて表示します。
-- 提案欄から場所比較の表示を減らし、日時候補を見やすくしました。
-
-
-## v15 修正
-
-- v14で週切り替えUIがHTMLから抜けており、読み込み途中で止まる問題を修正しました。
-- `index.html` のCSS/JS読み込み番号を `v=15` に更新しました。
-
-
-## v19の変更
-
-- 回答者選択エリアを画面上部に移動しました。
-- 回答者一覧を大きいボタン表示にして、スマホでも押しやすくしました。
-- 選択中の回答者を分かりやすく表示しました。
-- 新しい回答者追加フォームは折りたたみにして、普段は選択操作を優先できるUIにしました。
+`service_role` や `sb_secret_` はGitHub Pagesに入れないでください。

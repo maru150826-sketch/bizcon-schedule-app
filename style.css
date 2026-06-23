@@ -373,3 +373,116 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
     padding: 12px 8px;
   }
 }
+
+/* v20: first-action UI */
+.compact-hero {
+  padding-top: 24px;
+  padding-bottom: 22px;
+}
+.compact-hero h1 {
+  margin-bottom: 6px;
+}
+.slim-card {
+  padding: 14px 16px;
+}
+.compact-title {
+  margin-bottom: 12px;
+}
+.top-member-card {
+  border: 2px solid rgba(36, 59, 83, 0.16);
+}
+.current-member-highlight {
+  background: #eef6ff;
+  border-color: #bfd7f2;
+  margin-bottom: 12px;
+}
+.large-member-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+}
+.large-member-list .member-chip {
+  width: 100%;
+  border-radius: 16px;
+  padding: 14px 12px;
+  font-size: 16px;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+}
+.member-chip-memo {
+  font-size: 12px;
+  opacity: .78;
+  font-weight: 700;
+}
+.add-member-details {
+  margin-top: 14px;
+  background: #f8f6f1;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+}
+.add-member-details summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+.add-member-form {
+  margin-top: 12px;
+}
+.top-confirmed-section {
+  border: 2px solid rgba(21, 127, 59, 0.22);
+  background: linear-gradient(180deg, #fffef9, #f8fff9);
+}
+.hot-suggestions-section {
+  border: 2px solid rgba(199, 121, 59, 0.20);
+}
+.hot-candidate-list {
+  gap: 12px;
+}
+.hot-candidate-card {
+  border-width: 2px;
+  background: linear-gradient(180deg, #fffdf9, #fff8ef);
+}
+.hot-card-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+.hot-label-row {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.hot-date-title {
+  font-size: clamp(20px, 5vw, 28px);
+}
+.hot-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 190px;
+}
+.hot-people-box {
+  margin-top: 12px;
+}
+.compact-control-line {
+  align-items: center;
+}
+.compact-week-control {
+  margin-top: 0;
+}
+.compact-slot-form textarea {
+  min-height: 70px;
+}
+@media (max-width: 720px) {
+  .container { width: min(100% - 18px, 980px); gap: 12px; }
+  .card, .notice { padding: 15px; border-radius: 18px; }
+  .hero { padding-left: 14px; padding-right: 14px; }
+  .hot-card-main { grid-template-columns: 1fr; }
+  .hot-actions { min-width: 0; }
+  .hot-actions .big-button { width: 100%; }
+  .large-member-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form-grid, .slot-form { grid-template-columns: 1fr; }
+  .group-head { display: grid; }
+}
