@@ -116,15 +116,20 @@ function fillTimeSelects() {
 }
 
 function bindEvents() {
-  $('refreshButton').addEventListener('click', () => loadAll({ silent: false }));
-  $('memberForm').addEventListener('submit', handleMemberSubmit);
-  $('availabilityForm').addEventListener('submit', handleAvailabilitySubmit);
-  $('cancelEditAvailability').addEventListener('click', cancelEditAvailability);
-  $('minDurationSelect').addEventListener('change', render);
-  $('prevWeekButton').addEventListener('click', () => shiftWeek(-7));
-  $('nextWeekButton').addEventListener('click', () => shiftWeek(7));
-  $('thisWeekButton').addEventListener('click', () => setWeek(startOfWeekISO(new Date())));
-  $('weekPicker').addEventListener('change', (event) => setWeek(startOfWeekISO(event.target.value)));
+  const on = (id, type, handler) => {
+    const el = $(id);
+    if (el) el.addEventListener(type, handler);
+  };
+  on('refreshButton', 'click', () => loadAll({ silent: false }));
+  on('memberForm', 'submit', handleMemberSubmit);
+  on('availabilityForm', 'submit', handleAvailabilitySubmit);
+  on('cancelEditAvailability', 'click', cancelEditAvailability);
+  on('minDurationSelect', 'change', render);
+  on('prevWeekButton', 'click', () => shiftWeek(-7));
+  on('nextWeekButton', 'click', () => setWeek(addDaysISO(startOfWeekISO(new Date()), 7)));
+  on('nextNextWeekButton', 'click', () => setWeek(addDaysISO(startOfWeekISO(new Date()), 14)));
+  on('thisWeekButton', 'click', () => setWeek(startOfWeekISO(new Date())));
+  on('weekPicker', 'change', (event) => setWeek(startOfWeekISO(event.target.value)));
 }
 
 async function init() {
@@ -339,6 +344,8 @@ function editAvailability(id) {
   $('availableMemo').value = item.memo || '';
   $('availabilitySubmit').textContent = '編集内容を保存';
   $('cancelEditAvailability').classList.remove('is-hidden');
+  const details = $('manualInputDetails');
+  if (details) details.open = true;
   $('availabilitySection').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function cancelEditAvailability() { resetAvailabilityForm(); }
@@ -371,7 +378,7 @@ async function endorseAvailability(id) {
   const item = state.availability.find((a) => a.id === id);
   if (!item) return toast('空き時間が見つかりません。再読み込みしてください');
   if (item.member_id === m.id) return toast('これは自分の空き時間です');
-  if (hasSameAvailabilityForMember(m.id, item)) return toast('すでにこの時間に賛同済みです');
+  if (hasSameAvailabilityForMember(m.id, item)) return toast('すでに参加できる済みです');
 
   try {
     const { error } = await client.from('availability_slots').insert({
@@ -717,6 +724,7 @@ function render() {
   renderConfirmed();
   renderMembers();
   renderCurrentMember();
+  renderInputStatus();
   renderSuggestions();
   renderAvailabilityList();
 }
@@ -727,7 +735,7 @@ function renderGroup() {
 function renderWeekControl() {
   $('weekRangeText').textContent = formatWeekRange();
   $('weekPicker').value = state.weekStart;
-  $('weekHintText').textContent = `今は ${formatWeekRange()} の空き時間・提案だけを表示しています。別週は左右のボタンで切り替えられます。`;
+  $('weekHintText').textContent = `表示中：${formatWeekRange()}。よく使う週は「今週・来週・再来週」から選べます。`;
 }
 function renderMembers() {
   const box = $('memberList');
@@ -764,6 +772,26 @@ function renderCurrentMember() {
     </div>
   `;
 }
+
+function renderInputStatus() {
+  const box = $('inputStatusBox');
+  if (!box) return;
+  if (!state.members.length) {
+    box.innerHTML = '';
+    return;
+  }
+  const weekAvailability = selectedWeekAvailability();
+  const inputIds = new Set(weekAvailability.map((a) => a.member_id));
+  const done = state.members.filter((m) => inputIds.has(m.id));
+  const missing = state.members.filter((m) => !inputIds.has(m.id));
+  box.innerHTML = `
+    <div class="input-status-grid">
+      <div><b>入力済み</b><span>${done.map((m) => escapeHtml(m.name)).join('、') || 'なし'}</span></div>
+      <div><b>未入力</b><span>${missing.map((m) => escapeHtml(m.name)).join('、') || 'なし'}</span></div>
+    </div>
+  `;
+}
+
 function renderSuggestions() {
   const box = $('suggestionList');
   const weekAvailability = selectedWeekAvailability();
@@ -777,7 +805,7 @@ function renderSuggestions() {
   }
   const suggestions = buildSuggestions();
   if (!suggestions.length) {
-    box.innerHTML = '<div class="empty">まだ2人以上が重なる時間がありません。誰かの空き時間に賛同するか、自分の空き時間を追加してください。</div>';
+    box.innerHTML = '<div class="empty">まだ2人以上が重なる時間がありません。上の「参加できる」を押すか、自分の空き時間を追加してください。</div>';
     return;
   }
 
@@ -801,7 +829,7 @@ function renderSuggestions() {
             <div class="meta-line">${s.duration}分 / ${totalPossible}人が参加可能</div>
           </div>
           <div class="hot-actions">
-            ${own.canEndorse ? `<button type="button" class="primary big-button" onclick="endorseSuggestion(${index})">自分もこの時間に入れる</button>` : ''}
+            ${own.canEndorse ? `<button type="button" class="primary big-button" onclick="endorseSuggestion(${index})">参加できる</button>` : ''}
             <button type="button" class="secondary" onclick="confirmSuggestion(${index})">この時間で確定</button>
           </div>
         </div>
@@ -823,13 +851,14 @@ function renderConfirmed() {
     return;
   }
   box.className = 'candidate-list';
-  box.innerHTML = confirmed.map((slot) => {
+  box.innerHTML = confirmed.map((slot, index) => {
     const note = noteFor(slot.id);
     const counts = confirmedStatusSummary(slot);
     return `
-      <article class="confirmed-card">
+      <article class="confirmed-card ${index === 0 ? 'main-confirmed-card' : ''}">
         <div class="card-top">
           <div>
+            ${index === 0 ? '<div class="main-confirmed-label">次の確定予定</div>' : ''}
             <h3 class="date-title">${formatRange(slot)}</h3>
             <div class="meta-line">作業内容：${escapeHtml(slot.task_title || '作業会')}</div>
             ${slot.memo ? `<div class="meta-line">${escapeHtml(slot.memo)}</div>` : ''}
@@ -918,7 +947,7 @@ function renderAvailabilityLine(item) {
     <div class="daily-line daily-line-with-action">
       <div class="daily-line-main">${slotLine(item)}</div>
       <div class="daily-line-actions">
-        ${canEndorse ? `<button type="button" class="secondary mini-button" onclick="endorseAvailability('${item.id}')">この時間に賛同</button>` : ''}
+        ${canEndorse ? `<button type="button" class="secondary mini-button" onclick="endorseAvailability('${item.id}')">参加できる</button>` : ''}
         ${endorsed ? '<span class="badge good">賛同済み</span>' : ''}
         ${isMine ? '<span class="badge">自分の入力</span>' : ''}
       </div>

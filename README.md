@@ -1,72 +1,83 @@
-# SAMPO QUEST 空き時間調整アプリ v20
+# SAMPO QUEST 空き時間調整アプリ v21
 
-GitHub Pages + Supabase で動く、ビジコンチーム用の予定調整Webアプリです。
+GitHub Pages と Supabase で動く、ビジコンチーム向けの予定調整Webアプリです。
 
-## v20 の変更点
+## v21の方針
 
-- 回答者選択を画面上部に配置
-- 確定した作業予定を上の方に大きく表示
-- 2人以上が重なっている時間だけを「集まりそうな時間」として上に表示
-- 集まりそうな時間から、すぐに「自分もこの時間に入れる」を押せる
-- 集まりそうな時間から、すぐに「この時間で確定」できる
-- みんなの空き時間は確認用として下に表示
+この版では、入力作業を減らして「出てきた候補に乗る」使い方を優先しました。
+
+主な変更点:
+
+- 確定した作業予定を画面上部に大きく表示
+- 自分の名前を上部で選べるように配置
+- 2人以上が重なっている時間だけを「集まりそうな時間」として表示
+- 候補に対して「参加できる」を押すだけで自分の空き時間として追加
+- 「この時間で確定」を候補カードから直接押せる
+- 空き時間の手入力は折りたたみ式に変更
+- 週選択を「今週 / 来週 / 再来週」中心に変更
+- 入力済み / 未入力のメンバーを表示
 - 場所入力は削除
-- 使い方説明は折りたたみ式
 
-## 使い方
+## ファイル構成
 
-1. 自分の名前を選ぶ
-2. 上の「集まりそうな時間」を見る
-3. 行ける時間があれば「自分もこの時間に入れる」を押す
-4. よさそうなら「この時間で確定」を押す
-5. 確定した予定は画面上部に表示される
-6. 必要なら共有メモや参加可否を追記する
+- `index.html`
+- `style.css`
+- `app.js`
+- `supabase-schema.sql`
+- `README.md`
 
-## GitHub Pages に反映する方法
+## GitHub Pagesへの反映
 
-この5ファイルをリポジトリに上書きアップロードしてください。
+GitHubの `bizcon-schedule-app` リポジトリに、以下を上書きアップロードしてください。
 
-- index.html
-- style.css
-- app.js
-- README.md
-- supabase-schema.sql
+- `index.html`
+- `style.css`
+- `app.js`
+- `README.md`
+- `supabase-schema.sql`
 
-最低限、画面変更だけなら以下の3ファイルで反映されます。
+最低限、画面反映だけなら以下3ファイルでも動きます。
 
-- index.html
-- style.css
-- app.js
+- `index.html`
+- `style.css`
+- `app.js`
 
-アップロード後、公開ページを開いて `Ctrl + F5` で強制更新してください。
-スマホの場合はURL末尾に `?v=20` を付けて開いてください。
+アップロード後、公開ページを開き直してください。
 
-例：
+PC:
 
-```text
-https://maru150826-sketch.github.io/bizcon-schedule-app/?v=20
+```txt
+Ctrl + F5
+```
+
+スマホ:
+
+```txt
+https://maru150826-sketch.github.io/bizcon-schedule-app/?v=21
 ```
 
 ## Supabaseについて
 
-v11以降のSQLを実行済みで、以下のテーブルが存在していれば基本的に再実行不要です。
+v11以降の `supabase-schema.sql` を実行済みなら、v21で新しいテーブル追加は基本的に不要です。
 
-- groups
-- members
-- availability_slots
-- time_slots
-- responses
-- meeting_notes
+必要な主なテーブル:
 
-不安な場合は `supabase-schema.sql` をSupabaseのSQL Editorで再実行してください。
+- `groups`
+- `members`
+- `availability_slots`
+- `time_slots`
+- `responses`
+- `meeting_notes`
 
-## Supabase URL / Key
+## Supabase設定場所
 
-`app.js` の上部で設定します。
+`app.js` の上部にあります。
 
 ```js
 const SUPABASE_URL = 'https://dgaveiimlslljluimqxn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_JPpJW8RmeDVGESJtJatwbA_IH6PIXKE';
 ```
 
-`service_role` や `sb_secret_` はGitHub Pagesに入れないでください。
+`/rest/v1/` は付けません。
+
+`service_role` や `secret key` は絶対に入れないでください。
