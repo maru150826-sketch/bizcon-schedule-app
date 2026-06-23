@@ -728,3 +728,50 @@ th { background: #f5f7fa; font-size: 13px; color: #475467; }
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* v24: fold manual availability input and reorder main flow */
+.fold-card {
+  display: block;
+}
+.fold-card > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fold-card > summary::-webkit-details-marker {
+  display: none;
+}
+.no-margin {
+  margin-bottom: 0;
+}
+.fold-hint {
+  flex: 0 0 auto;
+  align-self: center;
+  border: 1px solid var(--line);
+  background: #f8f6f1;
+  color: var(--primary);
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.fold-body {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.fold-card[open] .fold-hint::after {
+  content: '中';
+}
+@media (max-width: 720px) {
+  .fold-card > summary {
+    align-items: stretch;
+  }
+  .fold-hint {
+    align-self: flex-start;
+    white-space: nowrap;
+  }
+}

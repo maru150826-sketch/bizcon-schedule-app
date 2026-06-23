@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SAMPO QUEST 空き時間調整</title>
-  <link rel="stylesheet" href="./style.css?v=23" />
+  <link rel="stylesheet" href="./style.css?v=24" />
 </head>
 <body>
   <div id="loading" class="loading is-hidden">読み込み中...</div>
@@ -108,42 +108,58 @@
     </section>
 
     <section id="availabilitySection" class="card is-hidden">
+      <details id="manualInputDetails" class="fold-card">
+        <summary>
+          <div class="section-title no-margin">
+            <span class="step">2</span>
+            <div>
+              <h2>空いている時間を入力</h2>
+              <p>候補に乗れないときだけ開いて入力します。時間は30分刻みです。</p>
+            </div>
+          </div>
+          <span class="fold-hint">タップで開閉</span>
+        </summary>
+
+        <form id="availabilityForm" class="slot-form fold-body">
+          <label class="full">日付
+            <input id="availableDate" name="date" type="date" required />
+          </label>
+          <div class="form-grid full no-gap-top">
+            <label>開始時間
+              <select id="availableStart" name="start_time" required></select>
+            </label>
+            <label>終了時間
+              <select id="availableEnd" name="end_time" required></select>
+            </label>
+          </div>
+          <label class="full">メモ 任意
+            <textarea id="availableMemo" name="memo" rows="3" placeholder="例：19時以降なら安定。途中参加になるかも。"></textarea>
+          </label>
+          <div class="button-row full">
+            <button id="availabilitySubmit" type="submit" class="primary big-button">空き時間を追加</button>
+            <button id="cancelEditAvailability" type="button" class="secondary is-hidden">編集をやめる</button>
+          </div>
+        </form>
+      </details>
+    </section>
+
+    <section id="availabilityListSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">2</span>
+        <span class="step">3</span>
         <div>
-          <h2>空いている時間を入力</h2>
-          <p>候補日を考えず、自分が空いている時間を何個でも入れてください。時間は30分刻みです。</p>
+          <h2>みんなの空き時間</h2>
+          <p>日付ごとに、誰が何時から何時まで空いているかを確認できます。自分の空き時間は編集・削除できます。</p>
         </div>
       </div>
-
-      <form id="availabilityForm" class="slot-form">
-        <label class="full">日付
-          <input id="availableDate" name="date" type="date" required />
-        </label>
-        <div class="form-grid full no-gap-top">
-          <label>開始時間
-            <select id="availableStart" name="start_time" required></select>
-          </label>
-          <label>終了時間
-            <select id="availableEnd" name="end_time" required></select>
-          </label>
-        </div>
-        <label class="full">メモ 任意
-          <textarea id="availableMemo" name="memo" rows="3" placeholder="例：19時以降なら安定。途中参加になるかも。"></textarea>
-        </label>
-        <div class="button-row full">
-          <button id="availabilitySubmit" type="submit" class="primary big-button">空き時間を追加</button>
-          <button id="cancelEditAvailability" type="button" class="secondary is-hidden">編集をやめる</button>
-        </div>
-      </form>
+      <div id="availabilityList" class="availability-list"></div>
     </section>
 
     <section id="suggestionSection" class="card is-hidden">
       <div class="section-title">
-        <span class="step">3</span>
+        <span class="step">4</span>
         <div>
           <h2>集まりやすい日時の提案</h2>
-          <p>似た時間を大量に出さず、アプリが重なりの強い枠だけに自動で絞ります。</p>
+          <p>2人以上が重なっている時間を中心に、アプリが候補を絞って表示します。</p>
         </div>
       </div>
       <div class="control-line">
@@ -155,20 +171,9 @@
             <option value="180">3時間以上</option>
           </select>
         </label>
-        <span class="muted">最大6件まで自動表示。似ている時間はまとめて減らします。</span>
+        <span class="muted">候補に乗れる場合は「参加できる」を押すだけでOKです。</span>
       </div>
       <div id="suggestionList" class="candidate-list"></div>
-    </section>
-
-    <section id="availabilityListSection" class="card is-hidden">
-      <div class="section-title">
-        <span class="step">4</span>
-        <div>
-          <h2>みんなの空き時間</h2>
-          <p>日付ごとに、誰が何時から何時まで空いているかを確認できます。自分の空き時間は編集・削除できます。</p>
-        </div>
-      </div>
-      <div id="availabilityList" class="availability-list"></div>
     </section>
 
   </main>
@@ -176,6 +181,6 @@
   <footer class="footer">GitHub Pages + Supabase / 固定チーム専用</footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./app.js?v=23"></script>
+  <script src="./app.js?v=24"></script>
 </body>
 </html>

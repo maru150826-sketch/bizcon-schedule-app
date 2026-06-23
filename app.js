@@ -729,7 +729,7 @@ async function saveConfirmedMemo(slotId) {
 }
 
 function render() {
-  ['groupSection','confirmedSection','memberSection','weekSection','availabilitySection','suggestionSection','availabilityListSection']
+  ['groupSection','confirmedSection','memberSection','weekSection','availabilitySection','availabilityListSection','suggestionSection']
     .forEach((id) => $(id).classList.remove('is-hidden'));
   renderGroup();
   renderWeekControl();
@@ -737,8 +737,8 @@ function render() {
   renderMembers();
   renderCurrentMember();
   renderInputStatus();
-  renderSuggestions();
   renderAvailabilityList();
+  renderSuggestions();
 }
 function renderGroup() {
   $('groupName').textContent = state.group?.name || 'SAMPO QUEST ビジコンチーム';
